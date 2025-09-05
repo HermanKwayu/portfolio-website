@@ -15,9 +15,10 @@ export default function App() {
         <Hero />
         <About />
         <Services />
-        <Portfolio />
-        <Testimonials />
-        <Contact />
+        {/* Coming Soon - Content to be updated */}
+        {/* <Portfolio /> */}
+        {/* <Testimonials /> */}
+        {/* <Contact /> */}
       </main>
       <Footer />
     </div>
