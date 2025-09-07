@@ -1,6 +1,10 @@
+import { useState } from "react";
 import { Button } from "./ui/button";
+import { DarkModeToggle } from "./DarkModeToggle";
+import { AdminDashboard } from "./AdminDashboard";
 
 export function Header() {
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
@@ -9,10 +13,13 @@ export function Header() {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-b border-border z-50">
+    <>
+      <header className="fixed top-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-b border-border z-50">
       <div className="container mx-auto px-6 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-primary rounded-full"></div>
+          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+            <span className="text-primary-foreground font-bold text-sm">HK</span>
+          </div>
           <span className="font-medium">Herman Kwayu</span>
         </div>
         
@@ -30,22 +37,23 @@ export function Header() {
             Services
           </button>
           <button 
-            onClick={() => scrollToSection('portfolio')}
+            onClick={() => scrollToSection('contact')}
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
-            Portfolio
+            Contact
           </button>
           <button 
-            onClick={() => scrollToSection('testimonials')}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setShowAdminDashboard(true)}
+            className="text-muted-foreground hover:text-primary transition-colors text-sm"
           >
-            Testimonials
+            Admin
           </button>
+          <DarkModeToggle />
           <Button 
             onClick={() => scrollToSection('contact')}
             variant="default"
           >
-            Contact
+            Get Started
           </Button>
         </nav>
 
@@ -56,6 +64,13 @@ export function Header() {
           </svg>
         </Button>
       </div>
-    </header>
+      </header>
+      
+      {/* Admin Dashboard */}
+      <AdminDashboard 
+        isVisible={showAdminDashboard}
+        onClose={() => setShowAdminDashboard(false)}
+      />
+    </>
   );
 }

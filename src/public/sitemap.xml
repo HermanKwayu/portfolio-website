@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+  <url>
+    <loc>https://www.hermankwayu.com</loc>
+    <lastmod>2024-12-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://www.hermankwayu.com/og-image.jpg</image:loc>
+      <image:title>Herman Kwayu - Strategic Business Consultant</image:title>
+      <image:caption>Strategic Business Consultant & Digital Transformation Expert based in Tanzania</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://www.hermankwayu.com/#about</loc>
+    <lastmod>2024-12-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://www.hermankwayu.com/og-image.jpg</image:loc>
+      <image:title>About Herman Kwayu</image:title>
+      <image:caption>Learn about Herman Kwayu's professional background and expertise in business consulting</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://www.hermankwayu.com/#services</loc>
+    <lastmod>2024-12-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://www.hermankwayu.com/og-image.jpg</image:loc>
+      <image:title>Business Consulting Services</image:title>
+      <image:caption>Comprehensive business consulting and digital transformation services by Herman Kwayu</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://www.hermankwayu.com/#contact</loc>
+    <lastmod>2024-12-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <image:image>
+      <image:loc>https://www.hermankwayu.com/og-image.jpg</image:loc>
+      <image:title>Contact Herman Kwayu</image:title>
+      <image:caption>Get in touch with Herman Kwayu for business consulting and strategic planning services</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://www.hermankwayu.com/unsubscribe</loc>
+    <lastmod>2024-12-07</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>

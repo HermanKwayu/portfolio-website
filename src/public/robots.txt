@@ -1,0 +1,49 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /private
+Disallow: /_redirects
+Disallow: /supabase/
+
+# Specific bot instructions
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: FacebookBot
+Allow: /
+
+User-agent: TwitterBot
+Allow: /
+
+User-agent: WhatsAppBot
+Allow: /
+
+# Block unwanted bots
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+# Sitemap location
+Sitemap: https://www.hermankwayu.com/sitemap.xml
+
+# Important pages for crawling
+Allow: /#about
+Allow: /#services  
+Allow: /#contact
+Allow: /unsubscribe
+
+# Cache-friendly
+# Last updated: 2024-12-07

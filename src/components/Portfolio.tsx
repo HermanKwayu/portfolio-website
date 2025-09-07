@@ -43,6 +43,7 @@ export function Portfolio() {
 
   return (
     <section id="portfolio" className="py-20 bg-secondary/10">
+      {/* Portfolio content commented out - will be added later
       <div className="container mx-auto px-6">
         <div className="max-w-3xl mx-auto text-center mb-16">
           <h2 className="text-3xl lg:text-4xl font-bold mb-6">Featured Projects</h2>
@@ -123,6 +124,7 @@ export function Portfolio() {
           </div>
         </div>
       </div>
+      */}
     </section>
   );
 }
