@@ -1,69 +1,221 @@
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Header } from "./components/Header";
 import { Hero } from "./components/Hero";
 import { About } from "./components/About";
 import { Services } from "./components/Services";
 import { Newsletter } from "./components/Newsletter";
 import { Portfolio } from "./components/Portfolio";
-import { Testimonials } from "./components/Testimonials";
 import { Contact } from "./components/Contact";
 import { Footer } from "./components/Footer";
 import { SEO } from "./components/SEO";
 import { Analytics } from "./components/Analytics";
 import { SitemapGenerator } from "./components/SitemapGenerator";
 import { SEOOptimizer } from "./components/SEOOptimizer";
-import { Unsubscribe } from "./components/Unsubscribe";
+import { LoadingSpinner } from "./components/LoadingSpinner";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { PerformanceMonitor } from "./components/PerformanceMonitor";
+import { AccessibilityEnhancer } from "./components/AccessibilityEnhancer";
+import { SEOValidator } from "./components/SEOValidator";
+
+// Lazy load heavy components for better performance
+const Unsubscribe = lazy(() => import("./components/Unsubscribe").then(module => ({ default: module.Unsubscribe })));
+const ResumeBuilder = lazy(() => import("./components/ResumeBuilder").then(module => ({ default: module.ResumeBuilder })));
+
+type ViewType = 'home' | 'resume' | 'unsubscribe';
+
+interface RouteConfig {
+  title: string;
+  description: string;
+  keywords: string;
+}
+
+const routeConfigs: Record<ViewType, RouteConfig> = {
+  home: {
+    title: "Herman Kwayu - Business Consultant Tanzania",
+    description: "Expert Business Consultant & Digital Transformation Specialist with 8+ years experience. Strategic planning, process optimization & growth strategy across Africa.",
+    keywords: "Herman Kwayu, business consultant Tanzania, digital transformation expert, strategic planning consultant, project management specialist, process optimization, KYC compliance expert, telecom consultant, fintech solutions, business analyst Africa, Dar es Salaam consultant, remote business consultant, innovation consulting, change management, growth strategy consultant"
+  },
+  resume: {
+    title: "Free Resume Builder - CV Templates | Herman Kwayu",
+    description: "Create professional resumes with our free resume builder. Choose from 4 modern templates designed for maximum impact. Build your CV in minutes - no signup required.",
+    keywords: "free resume builder, professional CV templates, resume creator, job application, career tools, CV maker, resume templates, professional resume, free CV builder"
+  },
+  unsubscribe: {
+    title: "Newsletter Unsubscribe - Herman Kwayu",
+    description: "Unsubscribe from Herman Kwayu's newsletter. We respect your privacy preferences and make it easy to manage your subscription settings.",
+    keywords: "newsletter unsubscribe, email preferences, privacy, Herman Kwayu newsletter"
+  }
+};
 
 export default function App() {
-  // Check for unsubscribe in URL - both path and parameters
-  const urlParams = new URLSearchParams(window.location.search);
-  const pathname = window.location.pathname;
-  
-  // Debug logging for unsubscribe detection
-  const hasUnsubscribeParam = urlParams.has('unsubscribe');
-  const hasEmailAndId = urlParams.has('email') && urlParams.has('id');
-  const pathIncludesUnsubscribe = pathname.includes('unsubscribe');
-  
-  // Log for debugging (remove in production)
-  if (hasUnsubscribeParam || hasEmailAndId || pathIncludesUnsubscribe) {
-    console.log('Unsubscribe detection:', {
-      pathname,
-      hasUnsubscribeParam,
-      hasEmailAndId,
-      pathIncludesUnsubscribe,
-      searchParams: window.location.search
-    });
-  }
-  
-  const isUnsubscribeRequest = hasUnsubscribeParam || hasEmailAndId || pathIncludesUnsubscribe;
+  const [currentView, setCurrentView] = useState<ViewType>('home');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  if (isUnsubscribeRequest) {
+  // Enhanced route detection with better performance
+  useEffect(() => {
+    const detectRoute = (): ViewType => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const pathname = window.location.pathname.toLowerCase();
+      
+      // Resume Builder detection
+      if (pathname.includes('resume') || pathname === '/resume-builder') {
+        return 'resume';
+      }
+      
+      // Unsubscribe detection
+      if (
+        urlParams.has('unsubscribe') || 
+        (urlParams.has('email') && urlParams.has('id')) ||
+        pathname.includes('unsubscribe')
+      ) {
+        return 'unsubscribe';
+      }
+      
+      return 'home';
+    };
+
+    const route = detectRoute();
+    setCurrentView(route);
+    setIsInitialLoad(false);
+
+    // Handle browser back/forward navigation
+    const handlePopState = () => {
+      const newRoute = detectRoute();
+      if (newRoute !== currentView) {
+        setIsLoading(true);
+        setTimeout(() => {
+          setCurrentView(newRoute);
+          setIsLoading(false);
+        }, 150); // Small delay for smooth transition
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    // Listen for custom navigation events
+    const handleNavigate = (event: CustomEvent<{ view: ViewType }>) => {
+      navigateToView(event.detail.view);
+    };
+
+    window.addEventListener('navigate-to-resume', handleNavigate as EventListener);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('navigate-to-resume', handleNavigate as EventListener);
+    };
+  }, [currentView]);
+
+  const navigateToView = (view: ViewType) => {
+    if (view === currentView) return;
+    
+    setIsLoading(true);
+    
+    // Update URL based on view
+    const urls = {
+      home: '/',
+      resume: '/resume-builder',
+      unsubscribe: '/unsubscribe'
+    };
+    
+    window.history.pushState({ view }, '', urls[view]);
+    
+    // Smooth transition
+    setTimeout(() => {
+      setCurrentView(view);
+      setIsLoading(false);
+      
+      // Scroll to top for new views
+      if (view !== 'home') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 150);
+  };
+
+  const handleBackToHome = () => {
+    navigateToView('home');
+  };
+
+  // Show initial loading state
+  if (isInitialLoad) {
     return (
-      <div className="min-h-screen">
-        <SEO />
-        <Analytics />
-        <Unsubscribe />
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
+  const currentConfig = routeConfigs[currentView];
+
   return (
-    <div className="min-h-screen">
-      <SEO />
-      <Analytics />
-      <SitemapGenerator />
-      <SEOOptimizer />
-      <Header />
-      <main>
-        <Hero />
-        <About />
-        <Services />
-        <Newsletter />
-        <Contact />
-        <Portfolio />
-        {/* Coming Soon - Adding client testimonials */}
-        {/* <Testimonials /> */}
-      </main>
-      <Footer />
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen">
+        <SEO 
+          title={currentConfig.title}
+          description={currentConfig.description}
+          keywords={currentConfig.keywords}
+        />
+        <Analytics />
+        <PerformanceMonitor />
+        <AccessibilityEnhancer />
+        {process.env.NODE_ENV === 'development' && <SEOValidator />}
+        
+        {currentView === 'home' && (
+          <>
+            <SitemapGenerator />
+            <SEOOptimizer />
+          </>
+        )}
+
+        {/* Loading overlay for smooth transitions */}
+        {isLoading && (
+          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <LoadingSpinner size="lg" />
+          </div>
+        )}
+
+        {/* Resume Builder Route */}
+        {currentView === 'resume' && (
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+              <LoadingSpinner size="lg" />
+            </div>
+          }>
+            <ResumeBuilder onBack={handleBackToHome} />
+          </Suspense>
+        )}
+
+        {/* Unsubscribe Route */}
+        {currentView === 'unsubscribe' && (
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+              <LoadingSpinner size="lg" />
+            </div>
+          }>
+            <Unsubscribe />
+          </Suspense>
+        )}
+
+        {/* Home Route */}
+        {currentView === 'home' && (
+          <>
+            <Header />
+            <main>
+              <Hero />
+              <About />
+              <Services 
+                onNavigateToResume={() => navigateToView('resume')} 
+              />
+              <Newsletter />
+              <Contact />
+              <Portfolio />
+              {/* Testimonials section ready for future activation */}
+              {/* <Testimonials /> */}
+            </main>
+            <Footer />
+          </>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }

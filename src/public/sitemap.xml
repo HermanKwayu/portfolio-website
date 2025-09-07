@@ -47,6 +47,28 @@
     </image:image>
   </url>
   <url>
+    <loc>https://www.hermankwayu.com/#portfolio</loc>
+    <lastmod>2025-01-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://www.hermankwayu.com/og-image.jpg</image:loc>
+      <image:title>Herman Kwayu Portfolio</image:title>
+      <image:caption>Professional portfolio showcasing Herman Kwayu's consulting projects and achievements</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://www.hermankwayu.com/resume-builder</loc>
+    <lastmod>2025-01-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+    <image:image>
+      <image:loc>https://www.hermankwayu.com/og-image.jpg</image:loc>
+      <image:title>Free Resume Builder Tool</image:title>
+      <image:caption>Professional resume builder with 4 modern templates - completely free to use</image:caption>
+    </image:image>
+  </url>
+  <url>
     <loc>https://www.hermankwayu.com/unsubscribe</loc>
     <lastmod>2025-01-07</lastmod>
     <changefreq>yearly</changefreq>

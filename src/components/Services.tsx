@@ -1,7 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 
-export function Services() {
+interface ServicesProps {
+  onNavigateToResume?: () => void;
+}
+
+export function Services({ onNavigateToResume }: ServicesProps) {
   const services = [
     {
       icon: "🎯",
@@ -9,6 +13,7 @@ export function Services() {
       description: "Develop comprehensive strategic plans that align with your business objectives and market opportunities.",
       features: ["Market Analysis", "Competitive Intelligence", "Strategic Roadmapping", "KPI Development"],
       gradient: "from-primary/20 to-primary/5",
+      action: "contact"
     },
     {
       icon: "🚀",
@@ -16,6 +21,7 @@ export function Services() {
       description: "Modernize your operations with digital solutions that improve efficiency and customer experience.",
       features: ["Process Automation", "Technology Integration", "Digital Workflows", "Change Management"],
       gradient: "from-primary/15 to-secondary/10",
+      action: "contact"
     },
     {
       icon: "📊",
@@ -23,13 +29,26 @@ export function Services() {
       description: "Identify and eliminate inefficiencies while optimizing your operations for maximum performance.",
       features: ["Process Analysis", "Cost Reduction", "Performance Metrics", "Operational Excellence"],
       gradient: "from-secondary/20 to-primary/10",
+      action: "contact"
     },
+    {
+      icon: "📄",
+      title: "Professional Resume Builder",
+      description: "Create stunning, ATS-friendly resumes with our professional templates. Completely free for all job seekers worldwide!",
+      features: ["Modern Templates", "ATS-Optimized", "PDF & Word Export", "Privacy-First (No Data Stored)"],
+      gradient: "from-green-200/20 to-blue-200/20",
+      action: "resume",
+      price: "FREE",
+      popular: true
+    },
+
     {
       icon: "💡",
       title: "Innovation Consulting",
       description: "Foster innovation culture and develop new business models to stay ahead of the competition.",
       features: ["Innovation Workshops", "Idea Generation", "Product Development", "Market Testing"],
       gradient: "from-primary/10 to-secondary/15",
+      action: "contact"
     },
     {
       icon: "👥",
@@ -37,6 +56,7 @@ export function Services() {
       description: "Successfully navigate organizational changes with structured change management methodologies.",
       features: ["Change Strategy", "Communication Plans", "Training Programs", "Adoption Support"],
       gradient: "from-secondary/15 to-primary/20",
+      action: "contact"
     },
     {
       icon: "📈",
@@ -44,6 +64,7 @@ export function Services() {
       description: "Develop and execute growth strategies that scale your business sustainably.",
       features: ["Growth Planning", "Market Expansion", "Partnership Strategy", "Revenue Optimization"],
       gradient: "from-primary/25 to-secondary/5",
+      action: "contact"
     }
   ];
 
@@ -51,6 +72,27 @@ export function Services() {
     const element = document.getElementById('contact');
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const openResumeBuilder = () => {
+    if (onNavigateToResume) {
+      // Update URL for better UX
+      window.history.pushState({}, '', '/resume-builder');
+      onNavigateToResume();
+    } else {
+      // Fallback to page reload
+      window.location.href = '/resume-builder';
+    }
+  };
+
+
+
+  const handleServiceAction = (action: string) => {
+    if (action === 'resume') {
+      openResumeBuilder();
+    } else {
+      scrollToContact();
     }
   };
 
@@ -80,18 +122,38 @@ export function Services() {
           {services.map((service, index) => (
             <Card 
               key={index} 
-              className="relative overflow-hidden group hover:shadow-xl hover:shadow-primary/10 transition-all duration-500 border-border/50 hover:border-primary/30 bg-card/80 backdrop-blur-sm"
+              className={`relative overflow-hidden group hover:shadow-xl hover:shadow-primary/10 transition-all duration-500 border-border/50 hover:border-primary/30 bg-card/80 backdrop-blur-sm ${service.popular ? 'ring-2 ring-primary/30' : ''}`}
             >
+              {/* Popular Badge */}
+              {service.popular && (
+                <div className="absolute top-4 right-4 z-20">
+                  <div className="bg-gradient-to-r from-green-500 to-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                    FREE!
+                  </div>
+                </div>
+              )}
+
               {/* Background Gradient */}
               <div className={`absolute inset-0 bg-gradient-to-br ${service.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
               
               <CardHeader className="pb-4 relative z-10">
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-5xl">{service.icon}</div>
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary/20 transition-colors duration-300">
-                    <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
+                  <div className="flex items-center gap-2">
+                    {service.price && (
+                      <div className={`text-sm font-bold px-2 py-1 rounded ${
+                        service.price === 'FREE' 
+                          ? 'text-green-700 bg-green-100' 
+                          : 'text-primary bg-primary/10'
+                      }`}>
+                        {service.price}
+                      </div>
+                    )}
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary/20 transition-colors duration-300">
+                      <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
                 <CardTitle className="text-xl text-foreground group-hover:text-primary transition-colors duration-300">
@@ -117,12 +179,18 @@ export function Services() {
                 {/* Hover Action */}
                 <div className="pt-4 border-t border-border/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <Button 
-                    variant="ghost" 
+                    variant={service.action === 'resume' ? 'default' : 'ghost'}
                     size="sm" 
-                    onClick={scrollToContact}
-                    className="w-full text-primary hover:text-primary-foreground hover:bg-primary"
+                    onClick={() => handleServiceAction(service.action)}
+                    className={`w-full ${
+                      service.action === 'resume' 
+                        ? 'bg-gradient-to-r from-green-600 to-blue-600 text-white hover:from-green-700 hover:to-blue-700' 
+                        : 'text-primary hover:text-primary-foreground hover:bg-primary'
+                    }`}
                   >
-                    Learn More
+                    {service.action === 'resume' 
+                      ? 'Build Free Resume' 
+                      : 'Learn More'}
                     <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                     </svg>

@@ -718,7 +718,192 @@ app.get("/make-server-4d80a1b0/unsubscribe", async (c) => {
   }
 });
 
-// Contact notification email template generator
+// Payment processing endpoint for Resume Builder
+app.post("/make-server-4d80a1b0/process-payment", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { amount, phoneNumber, provider, type, cardDetails, resumeData, template, formats } = body;
+
+    if (!amount || !resumeData || !template || !formats) {
+      return c.json({ error: "Missing required payment data" }, 400);
+    }
+
+    // Validate payment amount (should be 5000 TSH)
+    if (amount !== 5000) {
+      return c.json({ error: "Invalid payment amount" }, 400);
+    }
+
+    // Validate resume data has required fields
+    if (!resumeData.personalInfo || !resumeData.personalInfo.email || !resumeData.personalInfo.fullName) {
+      return c.json({ error: "Missing required personal information (name and email)" }, 400);
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(resumeData.personalInfo.email)) {
+      return c.json({ error: "Invalid email address format" }, 400);
+    }
+
+    // Generate unique payment ID
+    const paymentId = `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Store payment record
+    const paymentData = {
+      id: paymentId,
+      amount,
+      type,
+      status: 'processing',
+      resumeData,
+      template,
+      formats,
+      createdAt: new Date().toISOString()
+    };
+
+    if (type === 'mobile_money') {
+      paymentData.phoneNumber = phoneNumber;
+      paymentData.provider = provider;
+    } else if (type === 'card') {
+      // Don't store full card details for security - only last 4 digits
+      paymentData.cardLastFour = cardDetails.number?.slice(-4) || '';
+      paymentData.cardName = cardDetails.name || '';
+    }
+
+    await kv.set(`payment:${paymentId}`, paymentData);
+
+    // For demo purposes, simulate successful payment
+    console.log('⚠️ Payment processing in demo mode');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const paymentSuccess = true;
+
+    if (paymentSuccess) {
+      // Update payment status
+      const successfulPayment = {
+        ...paymentData,
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        transactionId: `TXN_${Date.now()}`
+      };
+      
+      await kv.set(`payment:${paymentId}`, successfulPayment);
+
+      // Generate resume download URLs (demo URLs)
+      const downloadUrls = {
+        pdf: `https://hermankwayu.com/resume-demo/${paymentId}.pdf`,
+        docx: `https://hermankwayu.com/resume-demo/${paymentId}.docx`
+      };
+
+      console.log(`✅ Resume payment successful: ${paymentId} - Amount: ${amount} TSH - Type: ${type}`);
+
+      return c.json({
+        success: true,
+        message: "Payment successful! Your resume is ready for download.",
+        paymentId,
+        downloadUrls,
+        transactionId: successfulPayment.transactionId
+      });
+
+    } else {
+      // Payment failed
+      const failedPayment = {
+        ...paymentData,
+        status: 'failed',
+        failedAt: new Date().toISOString()
+      };
+      
+      await kv.set(`payment:${paymentId}`, failedPayment);
+      
+      console.log(`❌ Resume payment failed: ${paymentId} - Amount: ${amount} TSH - Type: ${type}`);
+      
+      return c.json({
+        success: false,
+        error: "Payment processing failed. Please try again."
+      });
+    }
+
+  } catch (error) {
+    console.error('Payment processing error:', error);
+    return c.json({ error: "Payment processing failed" }, 500);
+  }
+});
+
+// Get payment status endpoint
+app.get("/make-server-4d80a1b0/payment-status/:paymentId", async (c) => {
+  try {
+    const paymentId = c.req.param('paymentId');
+    const payment = await kv.get(`payment:${paymentId}`);
+    
+    if (!payment) {
+      return c.json({ error: "Payment not found" }, 404);
+    }
+
+    // Return sanitized payment data (no sensitive info)
+    const sanitizedPayment = {
+      id: payment.id,
+      amount: payment.amount,
+      status: payment.status,
+      createdAt: payment.createdAt,
+      completedAt: payment.completedAt,
+      transactionId: payment.transactionId
+    };
+
+    return c.json(sanitizedPayment);
+    
+  } catch (error) {
+    console.error('Payment status error:', error);
+    return c.json({ error: "Failed to fetch payment status" }, 500);
+  }
+});
+
+// Free resume generation endpoint (no payment required)
+app.post("/make-server-4d80a1b0/generate-resume", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { resumeData, template, format } = body;
+
+    if (!resumeData || !template || !format) {
+      return c.json({ error: "Missing required data (resumeData, template, format)" }, 400);
+    }
+
+    // Validate resume data has required fields
+    if (!resumeData.personalInfo || !resumeData.personalInfo.email || !resumeData.personalInfo.fullName) {
+      return c.json({ error: "Missing required personal information (name and email)" }, 400);
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(resumeData.personalInfo.email)) {
+      return c.json({ error: "Invalid email address format" }, 400);
+    }
+
+    // Validate format
+    if (!['pdf', 'docx'].includes(format)) {
+      return c.json({ error: "Invalid format. Must be 'pdf' or 'docx'" }, 400);
+    }
+
+    console.log(`📄 Generating free resume: ${format} for ${resumeData.personalInfo.fullName}`);
+
+    // Generate resume content
+    const resumeContent = generateResumeContent(resumeData, template);
+    
+    // Return HTML content that can be downloaded
+    const downloadUrl = `data:text/html;charset=utf-8,${encodeURIComponent(resumeContent)}`;
+
+    console.log(`✅ Free resume generated successfully: ${format} for ${resumeData.personalInfo.email}`);
+
+    return c.json({
+      success: true,
+      message: `Your ${format.toUpperCase()} resume has been generated successfully!`,
+      downloadUrl,
+      format
+    });
+
+  } catch (error) {
+    console.error('Free resume generation error:', error);
+    return c.json({ error: "Resume generation failed" }, 500);
+  }
+});
+
+// Helper functions for email templates
 function generateContactNotificationHTML(contactData: any): string {
   const { name, email, company, service, budget, timeline, message, submittedAt, id } = contactData;
   
@@ -788,36 +973,31 @@ function generateContactNotificationHTML(contactData: any): string {
           color: #64748b;
           font-size: 12px;
         }
-        .priority-high {
-          background: #fef2f2;
-          border-left-color: #dc2626;
-        }
-        .action-button {
-          display: inline-block;
-          background: #1e293b;
-          color: white;
-          padding: 12px 24px;
-          text-decoration: none;
-          border-radius: 6px;
-          margin-top: 15px;
-        }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">
-          <h1 style="margin: 0; font-size: 24px;">🔔 New Contact Form Submission</h1>
-          <p style="margin: 10px 0 0 0; opacity: 0.9;">Someone is interested in your services!</p>
+          <h1 style="margin: 0;">🔔 New Contact Form Submission</h1>
+          <p style="margin: 10px 0 0 0; opacity: 0.9;">From your Herman Kwayu website</p>
         </div>
         
         <div class="field-group">
-          <div class="field-label">Contact Information</div>
-          <div class="field-value">
-            <strong>${name}</strong><br>
-            📧 <a href="mailto:${email}" style="color: #3b82f6;">${email}</a>
-            ${company ? `<br>🏢 ${company}` : ''}
-          </div>
+          <div class="field-label">Contact Person</div>
+          <div class="field-value">${name}</div>
         </div>
+
+        <div class="field-group">
+          <div class="field-label">Email Address</div>
+          <div class="field-value">${email}</div>
+        </div>
+
+        ${company ? `
+        <div class="field-group">
+          <div class="field-label">Company</div>
+          <div class="field-value">${company}</div>
+        </div>
+        ` : ''}
 
         ${service ? `
         <div class="field-group">
@@ -828,49 +1008,30 @@ function generateContactNotificationHTML(contactData: any): string {
 
         ${budget ? `
         <div class="field-group">
-          <div class="field-label">Budget Range</div>
+          <div class="field-label">Budget</div>
           <div class="field-value">${budget}</div>
         </div>
         ` : ''}
 
         ${timeline ? `
         <div class="field-group">
-          <div class="field-label">Project Timeline</div>
+          <div class="field-label">Timeline</div>
           <div class="field-value">${timeline}</div>
         </div>
         ` : ''}
 
-        <div class="field-group priority-high">
+        <div class="field-group">
           <div class="field-label">Message</div>
           <div class="message-box">
             <div class="field-value">${message}</div>
           </div>
         </div>
 
-        <div class="field-group">
-          <div class="field-label">Submission Details</div>
-          <div class="field-value">
-            📅 ${new Date(submittedAt).toLocaleString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric', 
-              hour: '2-digit', 
-              minute: '2-digit',
-              timeZoneName: 'short'
-            })}<br>
-            🆔 ${id}
-          </div>
-        </div>
-
-        <div style="text-align: center; margin-top: 30px;">
-          <a href="mailto:${email}?subject=Re: Your Inquiry - Herman Kwayu Consulting&body=Hello ${name},%0D%0A%0D%0AThank you for reaching out regarding ${service || 'your project'}. I've received your message and would love to discuss how I can help.%0D%0A%0D%0ABest regards,%0D%0AHerman Kwayu" 
-             class="action-button">📧 Reply to ${name}</a>
-        </div>
-        
         <div class="footer">
-          <p>This notification was sent from your Herman Kwayu contact form at hermankwayu.com</p>
-          <p>Contact Form System © ${new Date().getFullYear()}</p>
+          <p><strong>Submission ID:</strong> ${id}</p>
+          <p><strong>Submitted:</strong> ${new Date(submittedAt).toLocaleString()}</p>
+          <hr style="border: none; height: 1px; background: #e2e8f0; margin: 20px 0;">
+          <p>This notification was sent from your Herman Kwayu contact form system.</p>
         </div>
       </div>
     </body>
@@ -878,139 +1039,7 @@ function generateContactNotificationHTML(contactData: any): string {
   `;
 }
 
-// Password reset email template generator
-function generatePasswordResetHTML(tempPassword: string, resetToken: string): string {
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Admin Password Reset - Herman Kwayu</title>
-      <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-          line-height: 1.6;
-          color: #333;
-          max-width: 600px;
-          margin: 0 auto;
-          background-color: #f8fafc;
-          padding: 20px;
-        }
-        .container {
-          background: white;
-          border-radius: 8px;
-          padding: 40px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .header {
-          text-align: center;
-          background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-          color: white;
-          padding: 20px;
-          border-radius: 8px;
-          margin-bottom: 30px;
-        }
-        .alert-box {
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          border-radius: 6px;
-          padding: 20px;
-          margin: 20px 0;
-        }
-        .password-box {
-          background: #1e293b;
-          color: white;
-          padding: 20px;
-          border-radius: 8px;
-          text-align: center;
-          margin: 20px 0;
-          border: 2px solid #334155;
-        }
-        .password {
-          font-family: 'Courier New', monospace;
-          font-size: 24px;
-          font-weight: bold;
-          letter-spacing: 2px;
-          padding: 10px;
-          background: rgba(255,255,255,0.1);
-          border-radius: 4px;
-          margin: 10px 0;
-        }
-        .instructions {
-          background: #f0f9ff;
-          border: 1px solid #bae6fd;
-          border-radius: 6px;
-          padding: 20px;
-          margin: 20px 0;
-        }
-        .footer {
-          border-top: 1px solid #e2e8f0;
-          padding-top: 20px;
-          text-align: center;
-          color: #64748b;
-          font-size: 12px;
-          margin-top: 30px;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1 style="margin: 0; font-size: 24px;">🔐 Admin Password Reset</h1>
-          <p style="margin: 10px 0 0 0; opacity: 0.9;">Herman Kwayu Dashboard</p>
-        </div>
-        
-        <div class="alert-box">
-          <h3 style="color: #dc2626; margin-top: 0;">⚠️ Security Alert</h3>
-          <p><strong>A password reset was requested for your admin dashboard.</strong></p>
-          <p>If you did not request this reset, please ignore this email and your password will remain unchanged.</p>
-        </div>
-
-        <div class="password-box">
-          <h3 style="margin-top: 0;">Your Temporary Password</h3>
-          <div class="password">${tempPassword}</div>
-          <p style="margin-bottom: 0; opacity: 0.8;">Use this password to log into your admin dashboard</p>
-        </div>
-
-        <div class="instructions">
-          <h3 style="color: #1e40af; margin-top: 0;">📋 Next Steps</h3>
-          <ol style="padding-left: 20px;">
-            <li><strong>Go to your admin dashboard</strong> at <a href="https://hermankwayu.com" style="color: #2563eb;">hermankwayu.com</a></li>
-            <li><strong>Click "Admin"</strong> in the header</li>
-            <li><strong>Use the temporary password above</strong> to log in</li>
-            <li><strong>Immediately change your password</strong> in the Settings tab</li>
-          </ol>
-          <p style="margin-bottom: 0;"><strong>⏰ This temporary password expires in 30 minutes for security.</strong></p>
-        </div>
-
-        <div style="background: #fbbf24; color: #92400e; padding: 15px; border-radius: 6px; margin: 20px 0;">
-          <strong>🔒 Security Reminder:</strong> Change this temporary password immediately after logging in!
-        </div>
-        
-        <div class="footer">
-          <p>This password reset was requested at ${new Date().toLocaleString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric', 
-            hour: '2-digit', 
-            minute: '2-digit',
-            timeZoneName: 'short'
-          })}</p>
-          <p>Reset Token: ${resetToken.substring(0, 10)}...</p>
-          <p>Herman Kwayu Admin System © ${new Date().getFullYear()}</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-}
-
-// Newsletter template generator
-function generateNewsletterHTML(content: string, subscriberEmail: string, newsletterId: string): string {
-  const unsubscribeUrl = `https://hermankwayu.com/?unsubscribe=true&email=${encodeURIComponent(subscriberEmail)}&id=${newsletterId}`;
-  
+function generateNewsletterHTML(content: string, email: string, newsletterId: string): string {
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -1028,67 +1057,57 @@ function generateNewsletterHTML(content: string, subscriberEmail: string, newsle
           background-color: #f8fafc;
           padding: 20px;
         }
-        .container {
+        .newsletter-container {
           background: white;
-          border-radius: 8px;
-          padding: 40px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         }
         .header {
+          background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+          color: white;
+          padding: 30px;
           text-align: center;
-          border-bottom: 2px solid #1e293b;
-          padding-bottom: 20px;
-          margin-bottom: 30px;
-        }
-        .logo {
-          font-size: 28px;
-          font-weight: bold;
-          color: #1e293b;
-          margin-bottom: 10px;
-        }
-        .tagline {
-          color: #64748b;
-          font-size: 14px;
-          margin: 0;
         }
         .content {
-          margin-bottom: 40px;
-          white-space: pre-line;
+          padding: 30px;
         }
         .footer {
-          border-top: 1px solid #e2e8f0;
-          padding-top: 20px;
+          background: #f8fafc;
+          padding: 20px;
           text-align: center;
+          border-top: 1px solid #e2e8f0;
           color: #64748b;
-          font-size: 12px;
+          font-size: 14px;
         }
-        .unsubscribe {
+        .unsubscribe-link {
           color: #64748b;
           text-decoration: none;
         }
-        .unsubscribe:hover {
-          text-decoration: underline;
+        .unsubscribe-link:hover {
+          color: #1e293b;
         }
       </style>
     </head>
     <body>
-      <div class="container">
+      <div class="newsletter-container">
         <div class="header">
-          <div class="logo">HK</div>
-          <p class="tagline">Herman Kwayu - Digital Strategy & Process Optimization</p>
+          <h1 style="margin: 0; font-size: 28px;">Herman Kwayu</h1>
+          <p style="margin: 10px 0 0 0; opacity: 0.9;">Professional Consulting & Business Strategy</p>
         </div>
         
         <div class="content">
           ${content}
         </div>
-        
+
         <div class="footer">
-          <p>Thank you for subscribing to my newsletter!</p>
+          <p>You're receiving this because you subscribed to Herman Kwayu's newsletter.</p>
           <p>
-            <a href="${unsubscribeUrl}" class="unsubscribe">Unsubscribe</a> | 
-            <a href="https://hermankwayu.com" class="unsubscribe">Visit Website</a>
+            <a href="https://hermankwayu.com/unsubscribe?email=${encodeURIComponent(email)}" class="unsubscribe-link">
+              Unsubscribe from this newsletter
+            </a>
           </p>
-          <p>Herman Kwayu © ${new Date().getFullYear()}</p>
+          <p>Herman Kwayu | Professional Consulting Services</p>
         </div>
       </div>
     </body>
@@ -1096,4 +1115,245 @@ function generateNewsletterHTML(content: string, subscriberEmail: string, newsle
   `;
 }
 
+function generatePasswordResetHTML(tempPassword: string, resetToken: string): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Password Reset</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          max-width: 600px;
+          margin: 0 auto;
+          background-color: #f8fafc;
+          padding: 20px;
+        }
+        .container {
+          background: white;
+          border-radius: 8px;
+          padding: 30px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+          color: white;
+          padding: 20px;
+          border-radius: 8px;
+          text-align: center;
+          margin-bottom: 30px;
+        }
+        .password-box {
+          background: #fef2f2;
+          border: 2px solid #dc2626;
+          border-radius: 8px;
+          padding: 20px;
+          text-align: center;
+          margin: 20px 0;
+        }
+        .password {
+          font-family: monospace;
+          font-size: 24px;
+          font-weight: bold;
+          color: #dc2626;
+          letter-spacing: 2px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 style="margin: 0;">🔐 Password Reset</h1>
+          <p style="margin: 10px 0 0 0; opacity: 0.9;">Admin Dashboard Access</p>
+        </div>
+        
+        <p>Your admin password has been reset. Use this temporary password to log in:</p>
+        
+        <div class="password-box">
+          <p style="margin: 0 0 10px 0; font-weight: 600;">Temporary Password:</p>
+          <div class="password">${tempPassword}</div>
+        </div>
+
+        <p><strong>Important:</strong></p>
+        <ul>
+          <li>This temporary password expires in 30 minutes</li>
+          <li>Please change it immediately after logging in</li>
+          <li>If you didn't request this reset, please contact support</li>
+        </ul>
+
+        <p style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 14px;">
+          This is an automated email from the Herman Kwayu admin system.
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+function generateResumeContent(resumeData: any, template: string): string {
+  const { personalInfo, experience, education, skills } = resumeData;
+  
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Professional Resume - ${personalInfo.fullName}</title>
+      <style>
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          margin: 0;
+          padding: 20px;
+          background: white;
+        }
+        .resume-container {
+          max-width: 800px;
+          margin: 0 auto;
+          background: white;
+          padding: 40px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .header {
+          text-align: center;
+          border-bottom: 2px solid #1e293b;
+          padding-bottom: 20px;
+          margin-bottom: 30px;
+        }
+        .name {
+          font-size: 36px;
+          font-weight: bold;
+          color: #1e293b;
+          margin-bottom: 10px;
+        }
+        .contact-info {
+          color: #64748b;
+          font-size: 16px;
+        }
+        .section {
+          margin-bottom: 30px;
+        }
+        .section-title {
+          font-size: 24px;
+          font-weight: bold;
+          color: #1e293b;
+          border-bottom: 1px solid #e2e8f0;
+          padding-bottom: 10px;
+          margin-bottom: 20px;
+        }
+        .experience-item, .education-item {
+          margin-bottom: 20px;
+        }
+        .job-title, .degree {
+          font-size: 18px;
+          font-weight: bold;
+          color: #1e293b;
+        }
+        .company, .school {
+          font-size: 16px;
+          color: #3b82f6;
+          margin-bottom: 5px;
+        }
+        .date-range {
+          font-size: 14px;
+          color: #64748b;
+          margin-bottom: 10px;
+        }
+        .description {
+          color: #374151;
+          line-height: 1.6;
+        }
+        .skills-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 10px;
+        }
+        .skill-item {
+          background: #f1f5f9;
+          padding: 8px 12px;
+          border-radius: 6px;
+          color: #334155;
+          font-weight: 500;
+        }
+        .professional-summary {
+          background: #f8fafc;
+          padding: 20px;
+          border-radius: 8px;
+          border-left: 4px solid #3b82f6;
+          margin-bottom: 30px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="resume-container">
+        <div class="header">
+          <div class="name">${personalInfo.fullName}</div>
+          <div class="contact-info">
+            ${personalInfo.email} | ${personalInfo.phone || ''} | ${personalInfo.location || ''}
+          </div>
+        </div>
+
+        ${personalInfo.summary ? `
+        <div class="section">
+          <div class="professional-summary">
+            <div class="section-title">Professional Summary</div>
+            <div class="description">${personalInfo.summary}</div>
+          </div>
+        </div>
+        ` : ''}
+
+        ${experience && experience.length > 0 ? `
+        <div class="section">
+          <div class="section-title">Work Experience</div>
+          ${experience.map(exp => `
+            <div class="experience-item">
+              <div class="job-title">${exp.title}</div>
+              <div class="company">${exp.company}</div>
+              <div class="date-range">${exp.startDate} - ${exp.endDate || 'Present'}</div>
+              ${exp.description ? `<div class="description">${exp.description}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+        ` : ''}
+
+        ${education && education.length > 0 ? `
+        <div class="section">
+          <div class="section-title">Education</div>
+          ${education.map(edu => `
+            <div class="education-item">
+              <div class="degree">${edu.degree}</div>
+              <div class="school">${edu.school}</div>
+              <div class="date-range">${edu.year}</div>
+            </div>
+          `).join('')}
+        </div>
+        ` : ''}
+
+        ${skills && skills.length > 0 ? `
+        <div class="section">
+          <div class="section-title">Skills</div>
+          <div class="skills-grid">
+            ${skills.map(skill => `
+              <div class="skill-item">${skill}</div>
+            `).join('')}
+          </div>
+        </div>
+        ` : ''}
+
+        <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px;">
+          Professional Resume generated by Herman Kwayu Resume Builder
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+// Server startup
 Deno.serve(app.fetch);
