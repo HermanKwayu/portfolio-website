@@ -64,8 +64,10 @@
     "deploy:prepare": "npm run fix-deployment && npm run build",
     "deploy": "chmod +x scripts/deploy.sh && ./scripts/deploy.sh",
     "type-check": "tsc --noEmit",
+    "fix-vercel": "node scripts/fix-static-files-vercel.js",
     "prod:check": "node scripts/production-deploy.js",
-    "prod:build": "npm run prod:check && npm run build",
-    "prod:deploy": "npm run prod:check && npm run deploy:prepare"
+    "prod:build": "npm run prod:check && npm run fix-vercel && npm run build",
+    "prod:deploy": "npm run prod:check && npm run fix-vercel && npm run deploy:prepare",
+    "vercel:build": "npm run fix-vercel && npm run build"
   }
 }

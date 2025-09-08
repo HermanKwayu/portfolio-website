@@ -4,28 +4,32 @@
       "src": "/sitemap.xml",
       "dest": "/sitemap.xml",
       "headers": {
-        "Content-Type": "application/xml"
+        "Content-Type": "application/xml",
+        "Cache-Control": "public, max-age=3600"
       }
     },
     {
       "src": "/robots.txt",
       "dest": "/robots.txt",
       "headers": {
-        "Content-Type": "text/plain"
+        "Content-Type": "text/plain",
+        "Cache-Control": "public, max-age=3600"
       }
     },
     {
       "src": "/manifest.json",
       "dest": "/manifest.json",
       "headers": {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=86400"
       }
     },
     {
       "src": "/sw.js",
       "dest": "/sw.js",
       "headers": {
-        "Content-Type": "application/javascript"
+        "Content-Type": "application/javascript",
+        "Cache-Control": "public, max-age=0, must-revalidate"
       }
     },
     {
@@ -60,6 +64,10 @@
         {
           "key": "X-XSS-Protection",
           "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
         }
       ]
     },
@@ -69,6 +77,49 @@
         {
           "key": "Content-Type",
           "value": "application/xml"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
         }
       ]
     }
