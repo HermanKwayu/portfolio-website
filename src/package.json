@@ -57,6 +57,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "validate": "node scripts/validate-static-files.js",
+    "build:validate": "npm run validate && npm run build",
+    "fix-deployment": "node scripts/fix-deployment.js",
+    "deploy:prepare": "npm run fix-deployment && npm run build",
+    "deploy": "chmod +x scripts/deploy.sh && ./scripts/deploy.sh",
+    "type-check": "tsc --noEmit",
+    "prod:check": "node scripts/production-deploy.js",
+    "prod:build": "npm run prod:check && npm run build",
+    "prod:deploy": "npm run prod:check && npm run deploy:prepare"
   }
 }

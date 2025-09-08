@@ -27,11 +27,20 @@ export default defineConfig({
         },
       },
     },
+    // Ensure static files are copied correctly
+    assetsDir: 'assets',
+    copyPublicDir: true,
   },
+  publicDir: 'public',
   server: {
     port: 3000,
     host: true,
     open: true,
+    fs: {
+      strict: false,
+    },
+    // Properly serve static files with correct MIME types
+    middlewareMode: false,
   },
   preview: {
     port: 4173,

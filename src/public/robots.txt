@@ -46,4 +46,4 @@ Allow: /#contact
 Allow: /unsubscribe
 
 # Cache-friendly
-# Last updated: 2025-01-07
+# Last updated: 2025-01-14

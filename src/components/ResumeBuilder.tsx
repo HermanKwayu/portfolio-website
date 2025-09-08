@@ -8,6 +8,7 @@ import { ResumeTemplates } from './resume/ResumeTemplates';
 import { ResumeEditor } from './resume/ResumeEditor';
 import { ResumePreview } from './resume/ResumePreview';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { analytics } from './NoOpAnalytics';
 
 interface ResumeData {
   personalInfo: {
@@ -87,9 +88,23 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
 
+  // Track resume builder visit
+  useEffect(() => {
+    analytics.trackResumeBuilderVisit();
+  }, []);
+
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplate(templateId);
     setCurrentStep('editor');
+    
+    // Track template selection
+    const templateNames = {
+      'modern': 'Modern Professional',
+      'classic': 'Classic Executive', 
+      'creative': 'Creative Designer',
+      'minimal': 'Minimal Clean'
+    };
+    analytics.trackResumeTemplateSelected(templateId, templateNames[templateId as keyof typeof templateNames] || templateId);
   };
 
   const handleDataUpdate = (newData: ResumeData) => {
@@ -98,6 +113,21 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
 
   const handlePreview = () => {
     setCurrentStep('preview');
+    
+    // Track resume creation
+    const templateNames = {
+      'modern': 'Modern Professional',
+      'classic': 'Classic Executive', 
+      'creative': 'Creative Designer',
+      'minimal': 'Minimal Clean'
+    };
+    
+    const hasContent = !!(resumeData.personalInfo.fullName && resumeData.personalInfo.email);
+    analytics.trackResumeCreated(
+      selectedTemplate, 
+      templateNames[selectedTemplate as keyof typeof templateNames] || selectedTemplate,
+      hasContent
+    );
   };
 
   const handleDownload = async (format: 'pdf' | 'docx') => {
@@ -138,6 +168,19 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
+          
+          // Track successful download
+          const templateNames = {
+            'modern': 'Modern Professional',
+            'classic': 'Classic Executive', 
+            'creative': 'Creative Designer',
+            'minimal': 'Minimal Clean'
+          };
+          analytics.trackResumeDownloaded(
+            selectedTemplate, 
+            templateNames[selectedTemplate as keyof typeof templateNames] || selectedTemplate,
+            format.toUpperCase()
+          );
           
           console.log(`✅ Resume downloaded successfully: ${format}`);
         } else {

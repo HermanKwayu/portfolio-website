@@ -8,20 +8,21 @@ import { Portfolio } from "./components/Portfolio";
 import { Contact } from "./components/Contact";
 import { Footer } from "./components/Footer";
 import { SEO } from "./components/SEO";
-import { Analytics } from "./components/Analytics";
 import { SitemapGenerator } from "./components/SitemapGenerator";
 import { SEOOptimizer } from "./components/SEOOptimizer";
 import { LoadingSpinner } from "./components/LoadingSpinner";
+import { OptimizedLoader } from "./components/OptimizedLoader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { PerformanceMonitor } from "./components/PerformanceMonitor";
-import { AccessibilityEnhancer } from "./components/AccessibilityEnhancer";
-import { SEOValidator } from "./components/SEOValidator";
+import { ProductionWrapper } from "./components/ProductionWrapper";
+
+// Components are now handled by ProductionWrapper
 
 // Lazy load heavy components for better performance
 const Unsubscribe = lazy(() => import("./components/Unsubscribe").then(module => ({ default: module.Unsubscribe })));
 const ResumeBuilder = lazy(() => import("./components/ResumeBuilder").then(module => ({ default: module.ResumeBuilder })));
+const AdminDashboard = lazy(() => import("./components/AdminDashboard").then(module => ({ default: module.AdminDashboard })));
 
-type ViewType = 'home' | 'resume' | 'unsubscribe';
+type ViewType = 'home' | 'resume' | 'unsubscribe' | 'admin';
 
 interface RouteConfig {
   title: string;
@@ -44,6 +45,11 @@ const routeConfigs: Record<ViewType, RouteConfig> = {
     title: "Newsletter Unsubscribe - Herman Kwayu",
     description: "Unsubscribe from Herman Kwayu's newsletter. We respect your privacy preferences and make it easy to manage your subscription settings.",
     keywords: "newsletter unsubscribe, email preferences, privacy, Herman Kwayu newsletter"
+  },
+  admin: {
+    title: "Admin Dashboard - Herman Kwayu",
+    description: "Admin dashboard for managing website content, analytics, and system settings.",
+    keywords: "admin dashboard, website management, analytics, herman kwayu admin"
   }
 };
 
@@ -52,11 +58,16 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Enhanced route detection with better performance
+  // Optimized route detection 
   useEffect(() => {
     const detectRoute = (): ViewType => {
       const urlParams = new URLSearchParams(window.location.search);
       const pathname = window.location.pathname.toLowerCase();
+      
+      // Admin detection
+      if (pathname.includes('admin') || pathname === '/admin') {
+        return 'admin';
+      }
       
       // Resume Builder detection
       if (pathname.includes('resume') || pathname === '/resume-builder') {
@@ -75,19 +86,31 @@ export default function App() {
       return 'home';
     };
 
-    const route = detectRoute();
-    setCurrentView(route);
-    setIsInitialLoad(false);
+    try {
+      const route = detectRoute();
+      setCurrentView(route);
+      setIsInitialLoad(false);
+    } catch (error) {
+      console.error('Route detection error:', error);
+      setCurrentView('home');
+      setIsInitialLoad(false);
+    }
 
     // Handle browser back/forward navigation
     const handlePopState = () => {
-      const newRoute = detectRoute();
-      if (newRoute !== currentView) {
-        setIsLoading(true);
-        setTimeout(() => {
-          setCurrentView(newRoute);
-          setIsLoading(false);
-        }, 150); // Small delay for smooth transition
+      try {
+        const newRoute = detectRoute();
+        if (newRoute !== currentView) {
+          setIsLoading(true);
+          setTimeout(() => {
+            setCurrentView(newRoute);
+            setIsLoading(false);
+          }, 100); // Reduced delay for better performance
+        }
+      } catch (error) {
+        console.error('Navigation error:', error);
+        setCurrentView('home');
+        setIsLoading(false);
       }
     };
 
@@ -99,37 +122,45 @@ export default function App() {
     };
 
     window.addEventListener('navigate-to-resume', handleNavigate as EventListener);
+    window.addEventListener('navigate-to-admin', handleNavigate as EventListener);
     
     return () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('navigate-to-resume', handleNavigate as EventListener);
+      window.removeEventListener('navigate-to-admin', handleNavigate as EventListener);
     };
   }, [currentView]);
 
   const navigateToView = (view: ViewType) => {
     if (view === currentView) return;
     
-    setIsLoading(true);
-    
-    // Update URL based on view
-    const urls = {
-      home: '/',
-      resume: '/resume-builder',
-      unsubscribe: '/unsubscribe'
-    };
-    
-    window.history.pushState({ view }, '', urls[view]);
-    
-    // Smooth transition
-    setTimeout(() => {
-      setCurrentView(view);
-      setIsLoading(false);
+    try {
+      setIsLoading(true);
       
-      // Scroll to top for new views
-      if (view !== 'home') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    }, 150);
+      // Update URL based on view
+      const urls = {
+        home: '/',
+        resume: '/resume-builder',
+        unsubscribe: '/unsubscribe',
+        admin: '/admin'
+      };
+      
+      window.history.pushState({ view }, '', urls[view]);
+      
+      // Faster transition
+      setTimeout(() => {
+        setCurrentView(view);
+        setIsLoading(false);
+        
+        // Scroll to top for new views
+        if (view !== 'home') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Navigation error:', error);
+      setIsLoading(false);
+    }
   };
 
   const handleBackToHome = () => {
@@ -149,16 +180,13 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen">
-        <SEO 
-          title={currentConfig.title}
-          description={currentConfig.description}
-          keywords={currentConfig.keywords}
-        />
-        <Analytics />
-        <PerformanceMonitor />
-        <AccessibilityEnhancer />
-        {process.env.NODE_ENV === 'development' && <SEOValidator />}
+      <ProductionWrapper>
+        <div className="min-h-screen">
+          <SEO 
+            title={currentConfig.title}
+            description={currentConfig.description}
+            keywords={currentConfig.keywords}
+          />
         
         {currentView === 'home' && (
           <>
@@ -178,7 +206,7 @@ export default function App() {
         {currentView === 'resume' && (
           <Suspense fallback={
             <div className="min-h-screen flex items-center justify-center">
-              <LoadingSpinner size="lg" />
+              <OptimizedLoader size="lg" message="Loading Resume Builder..." />
             </div>
           }>
             <ResumeBuilder onBack={handleBackToHome} />
@@ -189,10 +217,24 @@ export default function App() {
         {currentView === 'unsubscribe' && (
           <Suspense fallback={
             <div className="min-h-screen flex items-center justify-center">
-              <LoadingSpinner size="lg" />
+              <OptimizedLoader size="lg" message="Loading..." />
             </div>
           }>
             <Unsubscribe />
+          </Suspense>
+        )}
+
+        {/* Admin Route */}
+        {currentView === 'admin' && (
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+              <OptimizedLoader size="lg" message="Loading Admin Dashboard..." />
+            </div>
+          }>
+            <AdminDashboard 
+              isVisible={true}
+              onClose={handleBackToHome}
+            />
           </Suspense>
         )}
 
@@ -215,7 +257,8 @@ export default function App() {
             <Footer />
           </>
         )}
-      </div>
+        </div>
+      </ProductionWrapper>
     </ErrorBoundary>
   );
 }

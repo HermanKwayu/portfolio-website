@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { DarkModeToggle } from "./DarkModeToggle";
-import { AdminDashboard } from "./AdminDashboard";
+import { FastAdminAuth } from "./FastAdminAuth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { Menu, X } from "lucide-react";
 
 export function Header() {
-  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -31,6 +30,13 @@ export function Header() {
   const navigateToResume = () => {
     window.dispatchEvent(new CustomEvent('navigate-to-resume', { 
       detail: { view: 'resume' } 
+    }));
+    setMobileMenuOpen(false);
+  };
+
+  const navigateToAdmin = () => {
+    window.dispatchEvent(new CustomEvent('navigate-to-admin', { 
+      detail: { view: 'admin' } 
     }));
     setMobileMenuOpen(false);
   };
@@ -77,7 +83,7 @@ export function Header() {
               </button>
             ))}
             <button 
-              onClick={() => setShowAdminDashboard(true)}
+              onClick={navigateToAdmin}
               className="text-muted-foreground hover:text-primary transition-colors text-sm focus:outline-none"
             >
               Admin
@@ -125,10 +131,7 @@ export function Header() {
                   ))}
                   <hr className="border-border" />
                   <button 
-                    onClick={() => {
-                      setShowAdminDashboard(true);
-                      setMobileMenuOpen(false);
-                    }}
+                    onClick={navigateToAdmin}
                     className="text-left text-lg text-muted-foreground hover:text-primary transition-colors focus:outline-none"
                   >
                     Admin
@@ -146,12 +149,7 @@ export function Header() {
           </div>
         </div>
       </header>
-      
-      {/* Admin Dashboard */}
-      <AdminDashboard 
-        isVisible={showAdminDashboard}
-        onClose={() => setShowAdminDashboard(false)}
-      />
+
     </>
   );
 }
