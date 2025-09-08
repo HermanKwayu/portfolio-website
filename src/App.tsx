@@ -14,6 +14,7 @@ import { LoadingSpinner } from "./components/LoadingSpinner";
 import { OptimizedLoader } from "./components/OptimizedLoader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ProductionWrapper } from "./components/ProductionWrapper";
+
 import { projectId, publicAnonKey } from './utils/supabase/info';
 
 // Components are now handled by ProductionWrapper

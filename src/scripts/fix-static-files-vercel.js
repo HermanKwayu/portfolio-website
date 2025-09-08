@@ -13,7 +13,11 @@ const domain = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}` 
   : process.env.PRODUCTION_URL 
   ? process.env.PRODUCTION_URL
-  : 'https://YOUR_DOMAIN';
+  : process.env.VERCEL_ENV === 'production'
+  ? 'https://www.hermankwayu.com'
+  : process.env.NODE_ENV === 'development'
+  ? 'http://localhost:4173'
+  : 'https://www.hermankwayu.com';
 
 console.log(`📍 Using domain: ${domain}`);
 

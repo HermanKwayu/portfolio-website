@@ -128,5 +128,6 @@
     "app/**": {
       "memory": 1024
     }
-  }
+  },
+  "buildCommand": "npm run vercel:build"
 }
