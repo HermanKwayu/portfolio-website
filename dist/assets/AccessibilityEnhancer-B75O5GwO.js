@@ -1,4 +1,4 @@
-import{r as h}from"./index-9SohzZkY.js";function g(){return h.useEffect(()=>{const r=()=>{if(!document.querySelector("#skip-links")){const e=document.createElement("div");e.id="skip-links",e.innerHTML=`
+import{r as h}from"./index-sjNF1scF.js";function g(){return h.useEffect(()=>{const r=()=>{if(!document.querySelector("#skip-links")){const e=document.createElement("div");e.id="skip-links",e.innerHTML=`
           <a 
             href="#main-content" 
             class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded focus:shadow-lg"
