@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -87,6 +87,7 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
   const [resumeData, setResumeData] = useState<ResumeData>(initialResumeData);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+  const [showPDFModal, setShowPDFModal] = useState(false);
 
   // Track resume builder visit
   useEffect(() => {
@@ -160,14 +161,40 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
         const result = await response.json();
         
         if (result.success) {
-          // Create download link and trigger download
+          // Handle different download methods based on format
           const downloadUrl = result.downloadUrl;
-          const link = document.createElement('a');
-          link.href = downloadUrl;
-          link.download = `${resumeData.personalInfo.fullName.replace(/\s+/g, '_')}_Resume.${format}`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          const fileName = result.fileName || `${resumeData.personalInfo.fullName.replace(/\s+/g, '_')}_Resume.${format}`;
+          
+          if (format === 'pdf') {
+            // Open in new tab for PDF generation
+            const newWindow = window.open(downloadUrl, '_blank');
+            if (newWindow) {
+              // Show professional modal instructions
+              setTimeout(() => {
+                setShowPDFModal(true);
+              }, 1000);
+            } else {
+              // Fallback if popup blocked
+              const link = document.createElement('a');
+              link.href = downloadUrl;
+              link.target = '_blank';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              
+              setTimeout(() => {
+                setShowPDFModal(true);
+              }, 500);
+            }
+          } else {
+            // Direct download for DOCX
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
           
           // Track successful download
           const templateNames = {
@@ -182,17 +209,23 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
             format.toUpperCase()
           );
           
-          console.log(`✅ Resume downloaded successfully: ${format}`);
+          console.log(`✅ Resume generated successfully: ${format}`);
+          
+          // Show success message
+          if (result.instructions) {
+            setDownloadError(''); // Clear any previous errors
+            // Could show a success toast here instead of error field
+          }
         } else {
           throw new Error(result.error || 'Download failed');
         }
       } else {
-        const errorText = await response.text();
-        throw new Error(`Download failed (${response.status}): ${errorText}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
+        throw new Error(errorData.error || `Server error (${response.status})`);
       }
     } catch (error) {
       console.error('Download error:', error);
-      setDownloadError(`Download failed: ${error.message || 'Please try again.'}`);
+      setDownloadError(`Generation failed: ${error.message || 'Please try again. Make sure all required fields are filled.'}`);
     } finally {
       setIsDownloading(false);
     }
@@ -327,7 +360,7 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
                           disabled={isDownloading}
                         >
                           <Download className="w-4 h-4" />
-                          {isDownloading ? 'Generating...' : 'Download PDF'}
+                          {isDownloading ? 'Generating...' : 'Generate PDF'}
                         </Button>
                         <Button 
                           variant="outline" 
@@ -336,7 +369,7 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
                           disabled={isDownloading}
                         >
                           <Download className="w-4 h-4" />
-                          {isDownloading ? 'Generating...' : 'Download DOCX'}
+                          {isDownloading ? 'Generating...' : 'Generate DOCX'}
                         </Button>
                       </div>
                     </CardTitle>
@@ -369,7 +402,7 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
                         disabled={isDownloading}
                       >
                         <Download className="w-4 h-4 mr-2" />
-                        {isDownloading ? 'Generating PDF...' : 'Download PDF'}
+                        {isDownloading ? 'Generating PDF...' : 'Generate PDF'}
                       </Button>
                       <Button 
                         onClick={() => handleDownload('docx')} 
@@ -378,13 +411,28 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
                         disabled={isDownloading}
                       >
                         <Download className="w-4 h-4 mr-2" />
-                        {isDownloading ? 'Generating DOCX...' : 'Download DOCX'}
+                        {isDownloading ? 'Generating DOCX...' : 'Generate DOCX'}
                       </Button>
                       {downloadError && (
-                        <div className="text-red-600 text-sm mt-3 p-2 bg-red-50 rounded">
+                        <div className="text-red-600 text-sm mt-3 p-2 bg-red-50 rounded border border-red-200">
+                          <div className="font-medium mb-1">Generation Error:</div>
                           {downloadError}
                         </div>
                       )}
+                      
+                      <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center gap-2 text-blue-700 mb-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="font-medium text-sm">How it works:</span>
+                        </div>
+                        <ul className="text-xs text-blue-600 space-y-1">
+                          <li><strong>PDF:</strong> Opens in new tab - use Ctrl+P and "Save as PDF"</li>
+                          <li><strong>DOCX:</strong> Downloads directly - open in Word/Google Docs</li>
+                          <li><strong>Mobile:</strong> Use "Share" then "Print" to save as PDF</li>
+                        </ul>
+                      </div>
                     </div>
                     
                     <div className="space-y-2">
@@ -422,6 +470,27 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
                         <li>• No tracking or data collection</li>
                       </ul>
                     </div>
+
+                    {downloadError && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-red-700 mb-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L5.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                          </svg>
+                          <span className="font-medium text-sm">Generation Issue</span>
+                        </div>
+                        <p className="text-xs text-red-600 mb-3">{downloadError}</p>
+                        <div className="text-xs text-red-600">
+                          <strong>Troubleshooting:</strong>
+                          <ul className="mt-1 space-y-1 ml-2">
+                            <li>• Ensure name and email are filled out</li>
+                            <li>• Try refreshing the page and re-entering data</li>
+                            <li>• Check your internet connection</li>
+                            <li>• Try a different browser if the issue persists</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -430,6 +499,56 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
         </div>
       </div>
 
+      {/* Professional PDF Generation Modal */}
+      {showPDFModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-xl shadow-2xl max-w-md w-full mx-4 transform animate-scale-in">
+            <div className="relative">
+              {/* Header with gradient background matching your brand */}
+              <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-purple-700 p-6 rounded-t-xl">
+                <div className="text-center">
+                  <h3 className="text-white text-lg font-semibold opacity-75">
+                    {resumeData.personalInfo.fullName || 'herman kwayu'}
+                  </h3>
+                </div>
+              </div>
+              
+              {/* Modal content */}
+              <div className="p-6 space-y-4">
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <p className="text-foreground text-sm leading-relaxed">
+                    Your resume has opened in a new tab. Use <span className="font-semibold">Ctrl+P</span> (Cmd+P on Mac) 
+                    and select <span className="font-semibold">"Save as PDF"</span> to download the PDF version.
+                  </p>
+                </div>
+                
+                {/* Additional helpful instructions */}
+                <div className="text-xs text-muted-foreground space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="font-medium">💡</span>
+                    <div>
+                      <strong>Desktop:</strong> Press Ctrl+P (or Cmd+P), then choose "Save as PDF" as destination
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-medium">📱</span>
+                    <div>
+                      <strong>Mobile:</strong> Use your browser's "Share" button, then select "Print" or "Save as PDF"
+                    </div>
+                  </div>
+                </div>
+                
+                <Button 
+                  onClick={() => setShowPDFModal(false)}
+                  className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-3 rounded-full"
+                >
+                  OK
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

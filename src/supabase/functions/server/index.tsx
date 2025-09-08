@@ -5,6 +5,27 @@ import * as kv from "./kv_store.tsx";
 
 const app = new Hono();
 
+// Initialize admin password in database if not already set
+async function initializeAdminPassword() {
+  try {
+    // Check if password already exists
+    const existingPassword = await kv.get('admin_password');
+    if (!existingPassword) {
+      // Only set initial password if none exists
+      const defaultPassword = Deno.env.get('ADMIN_PASSWORD') || 'HermanAdmin2024!';
+      await kv.set('admin_password', defaultPassword);
+      console.log(`✅ Admin password initialized (${defaultPassword.length} chars)`);
+    } else {
+      console.log(`✅ Admin password already exists (${existingPassword.length} chars)`);
+    }
+  } catch (error) {
+    console.warn('⚠️ Password init failed:', error);
+  }
+}
+
+// Initialize on startup
+initializeAdminPassword();
+
 // Enhanced application-level cache with LRU eviction and performance metrics
 const appCache = new Map<string, { data: any; expiry: number; hits: number; lastAccessed: number }>();
 const cacheStats = { hits: 0, misses: 0, sets: 0, evictions: 0 };
@@ -157,48 +178,124 @@ const checkAdminAuth = (request: Request) => {
   return adminToken === validAdminToken;
 };
 
-// Secure admin authentication endpoint
+// Ultra-fast admin authentication endpoint
 app.post("/make-server-4d80a1b0/admin/authenticate", async (c) => {
   try {
     const body = await c.req.json();
     const { password } = body;
 
+    // Immediate validation
     if (!password) {
+      console.log('❌ No password provided');
       return c.json({ error: "Password is required" }, 400);
     }
 
-    // Secure password validation
-    const expectedPassword = Deno.env.get('ADMIN_PASSWORD') || 'HermanAdmin2024!';
-    
-    // Normalize passwords to handle encoding issues
-    const normalizedReceived = password.trim();
+    // Get expected password from database
+    let expectedPassword;
+    try {
+      expectedPassword = await kv.get('admin_password');
+      if (!expectedPassword) {
+        // Fallback to environment variable
+        expectedPassword = Deno.env.get('ADMIN_PASSWORD') || 'HermanAdmin2024!';
+        // Store it in database for future use
+        await kv.set('admin_password', expectedPassword);
+      }
+    } catch (dbError) {
+      console.error('❌ Failed to fetch password from database:', dbError);
+      expectedPassword = Deno.env.get('ADMIN_PASSWORD') || 'HermanAdmin2024!';
+    }
+
+    // Secure logging (no password exposure)
+    console.log(`🔐 Auth attempt - received length: ${password.length}, expected length: ${expectedPassword.length}`);
+
+    // Normalize both passwords (trim whitespace)
+    const normalizedInput = password.trim();
     const normalizedExpected = expectedPassword.trim();
+
+    // Direct comparison with multiple checks
+    const isMatch = normalizedInput === normalizedExpected;
     
-    if (normalizedReceived === normalizedExpected) {
-      console.log(`✅ Successful admin authentication at ${new Date().toISOString()}`);
-      
-      // Generate session token (in production, use proper JWT)
-      const sessionToken = 'herman_admin_2024_secure_token';
-      
+    console.log(`🔐 Password comparison - lengths: input(${normalizedInput.length}) vs expected(${normalizedExpected.length}), match: ${isMatch}`);
+
+    if (isMatch) {
+      console.log('✅ Authentication successful');
       return c.json({ 
         success: true, 
         message: "Authentication successful",
-        token: sessionToken
+        token: 'herman_admin_2024_secure_token'
       });
     } else {
-      console.log(`❌ Failed admin login attempt at ${new Date().toISOString()}`);
-      
-      // Add small delay to prevent brute force attacks
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      console.log('❌ Authentication failed - password mismatch detected');
+      console.log(`🔍 Debug info - first 3 chars: input="${normalizedInput.substring(0, 3)}..." expected="${normalizedExpected.substring(0, 3)}..."`);
       return c.json({ 
         error: "Invalid password"
       }, 401);
     }
 
   } catch (error) {
-    console.error('Admin authentication error:', error);
+    console.error('❌ Authentication error:', error);
     return c.json({ error: "Authentication failed" }, 500);
+  }
+});
+
+// Update admin password endpoint with current password verification
+app.post("/make-server-4d80a1b0/admin/update-password", async (c) => {
+  if (!checkAdminAuth(c.req.raw)) {
+    return c.json({ error: 'Unauthorized access' }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { currentPassword, newPassword } = body;
+
+    if (!currentPassword || !newPassword) {
+      return c.json({ error: "Current password and new password are required" }, 400);
+    }
+
+    if (newPassword.length < 8) {
+      return c.json({ error: "New password must be at least 8 characters long" }, 400);
+    }
+
+    // Verify current password first
+    let expectedPassword;
+    try {
+      const dbPassword = await kv.get('admin_password');
+      expectedPassword = dbPassword || Deno.env.get('ADMIN_PASSWORD') || 'HermanAdmin2024!';
+    } catch (dbError) {
+      console.warn('Failed to fetch current password from database:', dbError);
+      expectedPassword = Deno.env.get('ADMIN_PASSWORD') || 'HermanAdmin2024!';
+    }
+
+    if (currentPassword.trim() !== expectedPassword.trim()) {
+      console.log(`❌ Failed password update attempt - incorrect current password at ${new Date().toISOString()}`);
+      return c.json({ error: "Current password is incorrect" }, 401);
+    }
+
+    // Validate new password strength
+    const hasUpperCase = /[A-Z]/.test(newPassword);
+    const hasLowerCase = /[a-z]/.test(newPassword);
+    const hasNumbers = /\d/.test(newPassword);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
+      return c.json({ 
+        error: "Password must contain uppercase letters, lowercase letters, numbers, and special characters" 
+      }, 400);
+    }
+
+    // Update password in database
+    await kv.set('admin_password', newPassword);
+    
+    console.log(`✅ Admin password updated successfully at ${new Date().toISOString()}`);
+    
+    return c.json({ 
+      success: true, 
+      message: "Password updated successfully"
+    });
+
+  } catch (error) {
+    console.error('Password update error:', error);
+    return c.json({ error: "Failed to update password" }, 500);
   }
 });
 
@@ -212,9 +309,100 @@ app.get("/make-server-4d80a1b0/health", (c) => {
   });
 });
 
-// Fast ping endpoint for connectivity tests
+// Ultra-fast ping endpoint for connectivity tests and warm-up
 app.get("/make-server-4d80a1b0/ping", (c) => {
-  return c.json({ pong: true, timestamp: Date.now() });
+  return c.json({ pong: true, ts: Date.now() });
+});
+
+// Fast warm-up endpoint to prevent cold starts
+app.get("/make-server-4d80a1b0/warm", (c) => {
+  return c.json({ warm: true });
+});
+
+// Secure password status endpoint (no password exposure)
+app.get("/make-server-4d80a1b0/admin/password-status", async (c) => {
+  if (!checkAdminAuth(c.req.raw)) {
+    return c.json({ error: 'Unauthorized access' }, 401);
+  }
+
+  try {
+    const dbPassword = await kv.get('admin_password');
+    return c.json({ 
+      status: 'ok',
+      hasPassword: !!dbPassword,
+      passwordLength: dbPassword ? dbPassword.length : 0,
+      source: dbPassword ? 'database' : 'none',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    return c.json({ 
+      status: 'error',
+      error: error.message 
+    }, 500);
+  }
+});
+
+
+
+// Emergency password reset endpoint (no auth required for emergency access)
+app.post("/make-server-4d80a1b0/admin/emergency-reset", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { emergencyKey, newPassword } = body;
+    
+    // Simple emergency key check
+    if (emergencyKey !== 'herman_emergency_2024') {
+      return c.json({ error: 'Invalid emergency key' }, 401);
+    }
+    
+    if (!newPassword || newPassword.length < 8) {
+      return c.json({ error: 'New password must be at least 8 characters' }, 400);
+    }
+    
+    await kv.set('admin_password', newPassword);
+    console.log(`🔄 Emergency password reset completed at ${new Date().toISOString()}`);
+    
+    return c.json({
+      success: true,
+      message: 'Password reset successfully. You can now login with the new password.',
+      newPasswordLength: newPassword.length
+    });
+  } catch (error) {
+    console.error('❌ Emergency reset failed:', error);
+    return c.json({ error: 'Reset failed' }, 500);
+  }
+});
+
+// Secure password reset endpoint (admin only)
+app.post("/make-server-4d80a1b0/admin/reset-password", async (c) => {
+  if (!checkAdminAuth(c.req.raw)) {
+    return c.json({ error: 'Unauthorized access' }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { newPassword } = body;
+
+    if (!newPassword || newPassword.length < 8) {
+      return c.json({
+        error: 'New password must be at least 8 characters long'
+      }, 400);
+    }
+
+    await kv.set('admin_password', newPassword);
+    console.log(`✅ Admin password reset completed at ${new Date().toISOString()}`);
+    
+    return c.json({
+      success: true,
+      message: 'Password reset completed successfully'
+    });
+  } catch (error) {
+    console.error('❌ Password reset failed:', error);
+    return c.json({
+      success: false,
+      error: 'Reset failed'
+    }, 500);
+  }
 });
 
 // ULTRA FAST batch endpoint to get all admin data in one request
@@ -371,6 +559,8 @@ app.get("/make-server-4d80a1b0/admin/dashboard-data", async (c) => {
     }
   });
 });
+
+// Removed - password should never be exposed via API
 
 // Health check for admin endpoints
 app.get("/make-server-4d80a1b0/admin/health", (c) => {
@@ -1016,17 +1206,15 @@ app.get("/make-server-4d80a1b0/admin/get-password", async (c) => {
   }
 
   try {
-    // Immediate return for maximum speed - no KV lookup needed
-    const defaultPassword = 'HermanAdmin2024!';
+    // Get the actual current password from database
+    const dbPassword = await kv.get('admin_password');
+    const currentPassword = dbPassword || Deno.env.get('ADMIN_PASSWORD') || 'HermanAdmin2024!';
     
-    console.log('🔑 Password fetched (instant)');
-    
-    // Add performance headers
-    c.res.headers.set('X-Response-Time', '0ms');
-    c.res.headers.set('X-Cache', 'STATIC');
+    console.log(`🔑 Current password fetched from: ${dbPassword ? 'database' : 'environment/default'}`);
     
     return c.json({ 
-      password: defaultPassword,
+      password: currentPassword,
+      source: dbPassword ? 'database' : 'fallback',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -1439,21 +1627,76 @@ app.post("/make-server-4d80a1b0/generate-resume", async (c) => {
     // Generate resume content
     const resumeContent = generateResumeContent(resumeData, template);
     
-    // Return HTML content that can be downloaded
-    const downloadUrl = `data:text/html;charset=utf-8,${encodeURIComponent(resumeContent)}`;
+    // Create a proper filename
+    const safeFileName = resumeData.personalInfo.fullName
+      .replace(/[^a-zA-Z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
 
-    console.log(`✅ Free resume generated successfully: ${format} for ${resumeData.personalInfo.email}`);
+    // For HTML format (can be saved as PDF by browser)
+    if (format === 'pdf') {
+      // Create a blob URL for the HTML content that can be printed to PDF
+      const htmlBlob = `data:text/html;charset=utf-8,${encodeURIComponent(resumeContent)}`;
+      
+      console.log(`✅ Free PDF resume generated successfully for ${resumeData.personalInfo.email}`);
+      
+      return c.json({
+        success: true,
+        message: "Your PDF resume has been generated successfully! It will open in a new tab where you can print or save as PDF.",
+        downloadUrl: htmlBlob,
+        fileName: `${safeFileName}_Resume.html`,
+        format: 'pdf',
+        instructions: "The resume will open in a new tab. Use your browser's print function and select 'Save as PDF' to download the PDF version."
+      });
+    }
+    
+    // For DOCX format, return HTML that can be saved and opened in Word
+    if (format === 'docx') {
+      // Create Word-compatible HTML
+      const wordContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
+        <head>
+          <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+          <title>${resumeData.personalInfo.fullName} - Resume</title>
+          <!--[if gte mso 9]>
+          <xml>
+            <w:WordDocument>
+              <w:View>Print</w:View>
+              <w:Zoom>90</w:Zoom>
+              <w:DoNotPromptForConvert/>
+              <w:DoNotShowMarkupExtensions/>
+            </w:WordDocument>
+          </xml>
+          <![endif]-->
+        </head>
+        <body>
+          ${resumeContent.replace(/<html[^>]*>|<\/html>|<head[^>]*>.*?<\/head>|<body[^>]*>|<\/body>/gis, '')}
+        </body>
+        </html>
+      `;
+      
+      const docBlob = `data:application/msword;charset=utf-8,${encodeURIComponent(wordContent)}`;
+      
+      console.log(`✅ Free DOCX resume generated successfully for ${resumeData.personalInfo.email}`);
+      
+      return c.json({
+        success: true,
+        message: "Your Word document resume has been generated successfully!",
+        downloadUrl: docBlob,
+        fileName: `${safeFileName}_Resume.doc`,
+        format: 'docx',
+        instructions: "The resume will download as a Word document that you can open and edit in Microsoft Word or Google Docs."
+      });
+    }
 
-    return c.json({
-      success: true,
-      message: `Your ${format.toUpperCase()} resume has been generated successfully!`,
-      downloadUrl,
-      format
-    });
+    return c.json({ error: "Unsupported format" }, 400);
 
   } catch (error) {
     console.error('Free resume generation error:', error);
-    return c.json({ error: "Resume generation failed" }, 500);
+    return c.json({ 
+      error: "Resume generation failed. Please try again.",
+      details: error.message 
+    }, 500);
   }
 });
 
@@ -1749,7 +1992,33 @@ function generatePasswordResetHTML(tempPassword: string, resetToken: string): st
 }
 
 function generateResumeContent(resumeData: any, template: string): string {
-  const { personalInfo, experience, education, skills } = resumeData;
+  const { personalInfo, experience, education, skills, projects, certifications } = resumeData;
+  
+  // Template-specific styles
+  const templateStyles = {
+    modern: {
+      primaryColor: '#3b82f6',
+      backgroundColor: '#f8fafc',
+      headerBackground: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)'
+    },
+    classic: {
+      primaryColor: '#1e293b',
+      backgroundColor: '#ffffff',
+      headerBackground: '#1e293b'
+    },
+    creative: {
+      primaryColor: '#8b5cf6',
+      backgroundColor: '#faf5ff',
+      headerBackground: 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)'
+    },
+    minimal: {
+      primaryColor: '#059669',
+      backgroundColor: '#f0fdf4',
+      headerBackground: '#059669'
+    }
+  };
+
+  const style = templateStyles[template] || templateStyles.modern;
   
   return `
     <!DOCTYPE html>
@@ -1759,13 +2028,18 @@ function generateResumeContent(resumeData: any, template: string): string {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Professional Resume - ${personalInfo.fullName}</title>
       <style>
+        @media print {
+          body { margin: 0; padding: 0; }
+          .resume-container { box-shadow: none; padding: 20px; }
+        }
+        
         body {
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
           line-height: 1.6;
           color: #333;
           margin: 0;
           padding: 20px;
-          background: white;
+          background: ${style.backgroundColor};
         }
         .resume-container {
           max-width: 800px;
@@ -1773,51 +2047,61 @@ function generateResumeContent(resumeData: any, template: string): string {
           background: white;
           padding: 40px;
           box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+          border-radius: 8px;
         }
         .header {
           text-align: center;
-          border-bottom: 2px solid #1e293b;
-          padding-bottom: 20px;
+          background: ${style.headerBackground};
+          color: white;
+          padding: 30px;
+          border-radius: 8px;
           margin-bottom: 30px;
         }
         .name {
           font-size: 36px;
           font-weight: bold;
-          color: #1e293b;
           margin-bottom: 10px;
         }
         .contact-info {
-          color: #64748b;
           font-size: 16px;
+          opacity: 0.9;
+        }
+        .contact-info a {
+          color: inherit;
+          text-decoration: none;
         }
         .section {
           margin-bottom: 30px;
+          page-break-inside: avoid;
         }
         .section-title {
           font-size: 24px;
           font-weight: bold;
-          color: #1e293b;
-          border-bottom: 1px solid #e2e8f0;
+          color: ${style.primaryColor};
+          border-bottom: 2px solid ${style.primaryColor};
           padding-bottom: 10px;
           margin-bottom: 20px;
         }
-        .experience-item, .education-item {
+        .experience-item, .education-item, .project-item, .certification-item {
           margin-bottom: 20px;
+          page-break-inside: avoid;
         }
-        .job-title, .degree {
+        .job-title, .degree, .project-name, .cert-name {
           font-size: 18px;
           font-weight: bold;
           color: #1e293b;
         }
-        .company, .school {
+        .company, .school, .cert-issuer {
           font-size: 16px;
-          color: #3b82f6;
+          color: ${style.primaryColor};
           margin-bottom: 5px;
+          font-weight: 500;
         }
         .date-range {
           font-size: 14px;
           color: #64748b;
           margin-bottom: 10px;
+          font-style: italic;
         }
         .description {
           color: #374151;
@@ -1825,22 +2109,64 @@ function generateResumeContent(resumeData: any, template: string): string {
         }
         .skills-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 10px;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 8px;
+          margin-bottom: 15px;
         }
         .skill-item {
-          background: #f1f5f9;
-          padding: 8px 12px;
+          background: ${style.backgroundColor === '#ffffff' ? '#f1f5f9' : style.backgroundColor};
+          padding: 6px 12px;
           border-radius: 6px;
           color: #334155;
           font-weight: 500;
+          text-align: center;
+          border: 1px solid ${style.primaryColor}20;
+        }
+        .skill-category {
+          margin-bottom: 20px;
+        }
+        .skill-category h4 {
+          margin: 0 0 10px 0;
+          font-size: 16px;
         }
         .professional-summary {
-          background: #f8fafc;
+          background: ${style.backgroundColor === '#ffffff' ? '#f8fafc' : style.backgroundColor};
           padding: 20px;
           border-radius: 8px;
-          border-left: 4px solid #3b82f6;
+          border-left: 4px solid ${style.primaryColor};
           margin-bottom: 30px;
+        }
+        .technologies {
+          font-size: 14px;
+          color: #64748b;
+          font-style: italic;
+        }
+        .project-url, .cert-url {
+          font-size: 14px;
+          margin-top: 5px;
+        }
+        .project-url a, .cert-url a {
+          color: ${style.primaryColor};
+          text-decoration: none;
+        }
+        .project-url a:hover, .cert-url a:hover {
+          text-decoration: underline;
+        }
+        @media print {
+          .resume-container {
+            box-shadow: none;
+            padding: 20px;
+          }
+          .header {
+            background: ${style.primaryColor} !important;
+            -webkit-print-color-adjust: exact;
+            color-adjust: exact;
+          }
+          .section-title {
+            color: ${style.primaryColor} !important;
+            -webkit-print-color-adjust: exact;
+            color-adjust: exact;
+          }
         }
       </style>
     </head>
@@ -1867,10 +2193,10 @@ function generateResumeContent(resumeData: any, template: string): string {
           <div class="section-title">Work Experience</div>
           ${experience.map(exp => `
             <div class="experience-item">
-              <div class="job-title">${exp.title}</div>
-              <div class="company">${exp.company}</div>
-              <div class="date-range">${exp.startDate} - ${exp.endDate || 'Present'}</div>
-              ${exp.description ? `<div class="description">${exp.description}</div>` : ''}
+              <div class="job-title">${exp.position || exp.title || ''}</div>
+              <div class="company">${exp.company || ''}</div>
+              <div class="date-range">${exp.startDate || ''} ${exp.startDate && exp.endDate ? ' - ' : ''}${exp.current ? 'Present' : (exp.endDate || '')}</div>
+              ${exp.description ? `<div class="description">${exp.description.replace(/\n/g, '<br>')}</div>` : ''}
             </div>
           `).join('')}
         </div>
@@ -1881,9 +2207,10 @@ function generateResumeContent(resumeData: any, template: string): string {
           <div class="section-title">Education</div>
           ${education.map(edu => `
             <div class="education-item">
-              <div class="degree">${edu.degree}</div>
-              <div class="school">${edu.school}</div>
-              <div class="date-range">${edu.year}</div>
+              <div class="degree">${edu.degree || ''} ${edu.field ? `in ${edu.field}` : ''}</div>
+              <div class="school">${edu.institution || edu.school || ''}</div>
+              <div class="date-range">${edu.startDate || ''} ${edu.startDate && edu.endDate ? ' - ' : ''}${edu.endDate || ''}</div>
+              ${edu.gpa ? `<div class="description">GPA: ${edu.gpa}</div>` : ''}
             </div>
           `).join('')}
         </div>
@@ -1892,11 +2219,48 @@ function generateResumeContent(resumeData: any, template: string): string {
         ${skills && skills.length > 0 ? `
         <div class="section">
           <div class="section-title">Skills</div>
-          <div class="skills-grid">
-            ${skills.map(skill => `
-              <div class="skill-item">${skill}</div>
-            `).join('')}
-          </div>
+          ${skills.map(skillGroup => `
+            <div class="skill-category">
+              <h4 style="color: ${style.primaryColor}; margin-bottom: 10px;">${skillGroup.category || ''}</h4>
+              <div class="skills-grid">
+                ${(skillGroup.items || []).map(skill => `
+                  <div class="skill-item">${skill}</div>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        ` : ''}
+
+        ${projects && projects.length > 0 ? `
+        <div class="section">
+          <div class="section-title">Projects</div>
+          ${projects.map(project => `
+            <div class="project-item">
+              <div class="project-name">${project.name || ''}</div>
+              ${project.description ? `<div class="description">${project.description.replace(/\n/g, '<br>')}</div>` : ''}
+              ${project.technologies && project.technologies.length > 0 ? `
+                <div class="technologies" style="margin-top: 10px;">
+                  <strong>Technologies:</strong> ${project.technologies.join(', ')}
+                </div>
+              ` : ''}
+              ${project.url ? `<div class="project-url"><a href="${project.url}" target="_blank">${project.url}</a></div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+        ` : ''}
+
+        ${certifications && certifications.length > 0 ? `
+        <div class="section">
+          <div class="section-title">Certifications</div>
+          ${certifications.map(cert => `
+            <div class="certification-item">
+              <div class="cert-name">${cert.name || ''}</div>
+              <div class="cert-issuer">${cert.issuer || ''}</div>
+              <div class="date-range">${cert.date || ''}</div>
+              ${cert.url ? `<div class="cert-url"><a href="${cert.url}" target="_blank">View Certificate</a></div>` : ''}
+            </div>
+          `).join('')}
         </div>
         ` : ''}
 

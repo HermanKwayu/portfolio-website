@@ -14,6 +14,7 @@ import { LoadingSpinner } from "./components/LoadingSpinner";
 import { OptimizedLoader } from "./components/OptimizedLoader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ProductionWrapper } from "./components/ProductionWrapper";
+import { projectId, publicAnonKey } from './utils/supabase/info';
 
 // Components are now handled by ProductionWrapper
 
@@ -57,6 +58,42 @@ export default function App() {
   const [currentView, setCurrentView] = useState<ViewType>('home');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [serverWarmed, setServerWarmed] = useState(false);
+
+  // Server warm-up for fast admin access
+  useEffect(() => {
+    const warmUpServer = async () => {
+      if (serverWarmed) return;
+      
+      try {
+        // Pre-warm server immediately on app load
+        const warmUrl = `https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/warm`;
+        
+        fetch(warmUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`,
+          },
+          keepalive: true
+        }).then(() => {
+          setServerWarmed(true);
+          console.log('🔥 Server pre-warmed for fast admin access');
+        }).catch(() => {
+          // Ignore warm-up errors
+        });
+      } catch (error) {
+        // Ignore warm-up errors
+      }
+    };
+    
+    // Warm up immediately
+    warmUpServer();
+    
+    // Re-warm every 2 minutes to prevent cold starts
+    const warmUpInterval = setInterval(warmUpServer, 120000);
+    
+    return () => clearInterval(warmUpInterval);
+  }, [serverWarmed]);
 
   // Optimized route detection 
   useEffect(() => {
