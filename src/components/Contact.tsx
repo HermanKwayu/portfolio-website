@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { analytics } from './SafeAnalytics';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -26,6 +27,17 @@ export function Contact() {
     setIsSubmitting(true);
     setSubmitStatus(null);
 
+    // Track form submission attempt
+    analytics.trackFormSubmission('contact', false, {
+      hasName: !!formData.name,
+      hasEmail: !!formData.email,
+      hasCompany: !!formData.company,
+      hasService: !!formData.service,
+      hasBudget: !!formData.budget,
+      hasTimeline: !!formData.timeline,
+      hasMessage: !!formData.message
+    });
+
     try {
       const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/contact`, {
         method: 'POST',
@@ -39,6 +51,14 @@ export function Contact() {
       const result = await response.json();
 
       if (response.ok) {
+        // Track successful submission
+        analytics.trackFormSubmission('contact', true, {
+          service: formData.service,
+          budget: formData.budget,
+          timeline: formData.timeline,
+          hasCompany: !!formData.company
+        });
+
         setSubmitStatus({
           type: 'success',
           message: result.message || 'Thank you for your message! I\'ll get back to you within 24 hours.'
@@ -53,6 +73,13 @@ export function Contact() {
           message: ''
         });
       } else {
+        // Track failed submission
+        analytics.trackFormSubmission('contact', false, {
+          error: result.error || 'Unknown error',
+          service: formData.service,
+          budget: formData.budget
+        });
+
         setSubmitStatus({
           type: 'error',
           message: result.error || 'Failed to send message. Please try again.'
@@ -60,6 +87,13 @@ export function Contact() {
       }
     } catch (error) {
       console.error('❌ Contact form submission error:', error);
+      
+      // Track network error
+      analytics.trackFormSubmission('contact', false, {
+        error: 'Network error',
+        errorMessage: error instanceof Error ? error.message : 'Unknown network error'
+      });
+
       setSubmitStatus({
         type: 'error',
         message: 'Failed to send message. Please check your connection and try again.'
@@ -315,6 +349,12 @@ export function Contact() {
                           target={info.link.startsWith('http') ? '_blank' : '_self'}
                           rel={info.link.startsWith('http') ? 'noopener noreferrer' : ''}
                           className="text-primary hover:text-primary/80 transition-colors font-medium"
+                          onClick={() => {
+                            analytics.trackUserInteraction('contact', `${info.title.toLowerCase()}_click`, {
+                              link: info.link,
+                              value: info.value
+                            });
+                          }}
                         >
                           {info.value}
                         </a>
@@ -357,7 +397,10 @@ export function Contact() {
                 <Button 
                   variant="outline" 
                   className="w-full border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground"
-                  onClick={() => window.open('https://calendly.com/truthherman/30min', '_blank')}
+                  onClick={() => {
+                    analytics.trackUserInteraction('contact', 'schedule_call_click');
+                    window.open('https://calendly.com/truthherman/30min', '_blank');
+                  }}
                 >
                   Schedule a Call
                 </Button>

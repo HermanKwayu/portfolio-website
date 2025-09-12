@@ -16,6 +16,7 @@ import { LoadingSpinner } from "./components/LoadingSpinner";
 import { OptimizedLoader } from "./components/OptimizedLoader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ProductionWrapper } from "./components/ProductionWrapper";
+import { analytics } from "./components/SafeAnalytics";
 
 import { projectId, publicAnonKey } from './utils/supabase/info';
 
@@ -37,7 +38,7 @@ interface RouteConfig {
 const routeConfigs: Record<ViewType, RouteConfig> = {
   home: {
     title: "Herman Kwayu - Business Consultant Tanzania",
-    description: "Expert Business Consultant & Digital Transformation Specialist with 8+ years experience helping businesses across Africa optimize processes, implement strategic planning, and achieve sustainable growth through innovative solutions. Specializing in KYC compliance, project management, fintech solutions, and telecom operations for startups and enterprises.",
+    description: "Herman Kwayu – Expert in KYC, compliance, and project management with 6+ years of experience in telecom and fintech, delivering impactful solutions.",
     keywords: "Herman Kwayu, business consultant Tanzania, digital transformation expert, strategic planning consultant, project management specialist, process optimization, KYC compliance expert, telecom consultant, fintech solutions, business analyst Africa, Dar es Salaam consultant, remote business consultant, innovation consulting, change management, growth strategy consultant"
   },
   resume: {
@@ -83,6 +84,12 @@ export default function App() {
     const warmUpServer = async () => {
       if (serverWarmed) return;
       
+      // Skip warm-up if no network connection
+      if (!navigator.onLine) {
+        console.log('⚠️ Server warm-up skipped (no network connection)');
+        return;
+      }
+      
       try {
         // Pre-warm server immediately on app load
         const warmUrl = `https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/warm`;
@@ -92,23 +99,30 @@ export default function App() {
           headers: {
             'Authorization': `Bearer ${publicAnonKey}`,
           },
-          keepalive: true
+          keepalive: true,
+          signal: AbortSignal.timeout(5000) // 5 second timeout
         }).then(() => {
           setServerWarmed(true);
           console.log('🔥 Server pre-warmed for fast admin access');
         }).catch(() => {
-          // Ignore warm-up errors
+          // Silently ignore warm-up errors - they're expected when offline
+          console.log('⚠️ Server warm-up failed (backend may be offline)');
         });
       } catch (error) {
-        // Ignore warm-up errors
+        // Ignore warm-up errors silently
+        console.log('⚠️ Server warm-up skipped (connection issues)');
       }
     };
     
     // Warm up immediately
     warmUpServer();
     
-    // Re-warm every 2 minutes to prevent cold starts
-    const warmUpInterval = setInterval(warmUpServer, 120000);
+    // Re-warm every 2 minutes to prevent cold starts (only if online)
+    const warmUpInterval = setInterval(() => {
+      if (navigator.onLine) {
+        warmUpServer();
+      }
+    }, 120000);
     
     return () => clearInterval(warmUpInterval);
   }, [serverWarmed]);
@@ -155,6 +169,9 @@ export default function App() {
       const route = detectRoute();
       setCurrentView(route);
       setIsInitialLoad(false);
+      
+      // Track page view
+      analytics.trackPageView(route);
     } catch (error) {
       console.error('Route detection error:', error);
       setCurrentView('home');
@@ -170,6 +187,9 @@ export default function App() {
           setTimeout(() => {
             setCurrentView(newRoute);
             setIsLoading(false);
+            
+            // Track page view for navigation
+            analytics.trackPageView(newRoute);
             
             // Scroll to top for new views
             if (newRoute !== 'home') {
@@ -227,6 +247,9 @@ export default function App() {
       setTimeout(() => {
         setCurrentView(view);
         setIsLoading(false);
+        
+        // Track page view for programmatic navigation
+        analytics.trackPageView(view);
         
         // Scroll to top for new views
         if (view !== 'home') {

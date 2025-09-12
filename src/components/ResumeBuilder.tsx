@@ -92,30 +92,6 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
   // Track resume builder visit
   useEffect(() => {
     analytics.trackResumeBuilderVisit();
-    
-    // Test server connectivity
-    const testServerConnection = async () => {
-      try {
-        console.log('🔍 Testing server connection...');
-        const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/health`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`
-          }
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log('✅ Server connection test successful:', result);
-        } else {
-          console.error('❌ Server connection test failed:', response.status);
-        }
-      } catch (error) {
-        console.error('❌ Server connection test error:', error);
-      }
-    };
-    
-    testServerConnection();
   }, []);
 
   const handleTemplateSelect = (templateId: string) => {
@@ -166,18 +142,6 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
         setIsDownloading(false);
         return;
       }
-
-      console.log('📤 Sending resume generation request:', {
-        hasResumeData: !!resumeData,
-        hasPersonalInfo: !!resumeData.personalInfo,
-        fullName: resumeData.personalInfo.fullName,
-        email: resumeData.personalInfo.email,
-        template: selectedTemplate,
-        format: format,
-        experienceCount: resumeData.experience?.length || 0,
-        educationCount: resumeData.education?.length || 0,
-        skillsCount: resumeData.skills?.length || 0
-      });
 
       // Call the free download endpoint
       const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/generate-resume`, {
@@ -257,17 +221,11 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
         }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
-        console.error('❌ [Resume] Server response error:', response.status, errorData);
         throw new Error(errorData.error || `Server error (${response.status})`);
       }
     } catch (error) {
-      console.error('❌ [Resume] Download error:', error);
-      console.error('❌ [Resume] Error details:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack
-      });
-      setDownloadError(`Error: ${error.message || 'Please try again. Make sure all required fields are filled.'}`);
+      console.error('Download error:', error);
+      setDownloadError(`Generation failed: ${error.message || 'Please try again. Make sure all required fields are filled.'}`);
     } finally {
       setIsDownloading(false);
     }

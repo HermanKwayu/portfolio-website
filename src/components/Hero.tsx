@@ -43,10 +43,8 @@ export function Hero() {
             <div className="space-y-6">
               <div className="space-y-3">
                 <p className="text-lg text-muted-foreground font-medium" aria-label="Introduction">Hi, I'm</p>
-                <h1 className="text-5xl lg:text-7xl font-bold leading-tight">
-                  <span className="text-foreground">Herman Kwayu</span>
-                  <span className="sr-only"> - </span>
-                  <span className="block text-primary mt-2">Business Consultant</span>
+                <h1 className="text-4xl font-bold">
+                  Herman 
                 </h1>
                 <div className="h-1 w-20 bg-gradient-to-r from-primary to-primary/50 rounded-full" aria-hidden="true"></div>
               </div>

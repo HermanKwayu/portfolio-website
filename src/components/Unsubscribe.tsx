@@ -40,11 +40,13 @@ export function Unsubscribe() {
     setSubmitStatus(null);
 
     try {
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/unsubscribe?email=${encodeURIComponent(emailToUnsubscribe)}`, {
-        method: 'GET',
+      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/unsubscribe`, {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${publicAnonKey}`
-        }
+        },
+        body: JSON.stringify({ email: emailToUnsubscribe.trim().toLowerCase() })
       });
 
       const result = await response.json();

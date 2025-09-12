@@ -1,5 +1,12 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
   "rewrites": [
+    {
+      "source": "/admin",
+      "destination": "/index.html"
+    },
     {
       "source": "/resume-builder",
       "destination": "/index.html"
@@ -9,8 +16,38 @@
       "destination": "/index.html"
     },
     {
-      "source": "/admin",
+      "source": "/privacy-policy",
+      "destination": "/index.html"  
+    },
+    {
+      "source": "/terms-of-service",
       "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/resume",
+      "destination": "/resume-builder",
+      "permanent": true
+    },
+    {
+      "source": "/cv-builder", 
+      "destination": "/resume-builder",
+      "permanent": true
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy-policy",
+      "permanent": true
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms-of-service", 
+      "permanent": true
     }
   ],
   "headers": [
@@ -18,12 +55,12 @@
       "source": "/(.*)",
       "headers": [
         {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
           "key": "X-Frame-Options",
           "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options", 
+          "value": "nosniff"
         },
         {
           "key": "X-XSS-Protection",
@@ -32,6 +69,19 @@
         {
           "key": "Referrer-Policy",
           "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000"
         }
       ]
     },
@@ -39,11 +89,7 @@
       "source": "/sitemap.xml",
       "headers": [
         {
-          "key": "Content-Type",
-          "value": "application/xml"
-        },
-        {
-          "key": "Cache-Control",
+          "key": "Cache-Control", 
           "value": "public, max-age=3600"
         }
       ]
@@ -52,50 +98,24 @@
       "source": "/robots.txt",
       "headers": [
         {
-          "key": "Content-Type",
-          "value": "text/plain"
-        },
-        {
           "key": "Cache-Control",
           "value": "public, max-age=3600"
         }
       ]
     },
     {
-      "source": "/manifest.json",
+      "source": "/admin",
       "headers": [
         {
-          "key": "Content-Type",
-          "value": "application/manifest+json"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        }
-      ]
-    },
-    {
-      "source": "/sw.js",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/javascript"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        },
-        {
-          "key": "Service-Worker-Allowed",
-          "value": "/"
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
         }
       ]
     }
   ],
   "functions": {
-    "app/**": {
-      "memory": 1024
+    "app/api/**/*.js": {
+      "runtime": "nodejs18.x"
     }
-  },
-  "buildCommand": "npm run vercel:build"
+  }
 }
