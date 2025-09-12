@@ -68,6 +68,8 @@
     "prod:check": "node scripts/production-deploy.js",
     "prod:build": "npm run prod:check && npm run fix-vercel && npm run build",
     "prod:deploy": "npm run prod:check && npm run fix-vercel && npm run deploy:prepare",
-    "vercel:build": "npm run fix-vercel && npm run build"
+    "vercel:build": "npm run fix-vercel && npm run build",
+    "deploy:static": "chmod +x scripts/deploy-with-static-files.sh && ./scripts/deploy-with-static-files.sh",
+    "deploy:complete": "npm run deploy:static && git add . && git commit -m '🚀 Deploy with static files fix' && git push origin main"
   }
 }

@@ -13,11 +13,9 @@ import { SEOAudit } from "./SEOAudit";
 import { AnalyticsDashboard } from "./AnalyticsDashboard";
 import { StaticFilesChecker } from "./StaticFilesChecker";
 import { StaticFileValidator } from "./StaticFileValidator";
+import { StaticFilesVerifier } from "./StaticFilesVerifier";
 import { ConnectionDiagnostic } from "./ConnectionDiagnostic";
 import { SimpleProductionHealthCheck } from "./SimpleProductionHealthCheck";
-
-
-
 
 interface ContactSubmission {
   id: string;
@@ -338,6 +336,77 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
     }
   }, [isAuthenticated, loading, lastRefresh]);
 
+  // Check admin session validity on component mount
+  useEffect(() => {
+    const checkAdminSession = async () => {
+      const token = localStorage.getItem('admin_token');
+      if (token) {
+        console.log('🔐 Admin token found - validating session...');
+        
+        // Validate the token by making a health check request
+        try {
+          const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/admin/health`, {
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`,
+              'X-Admin-Token': token,
+            }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result.authorized) {
+              setIsAuthenticated(true);
+              console.log('✅ Admin session validated - user authenticated');
+              
+              // Load dashboard data after short delay
+              setTimeout(() => {
+                debouncedLoadData(true);
+              }, 300);
+            } else {
+              console.log('❌ Admin token invalid - clearing session');
+              localStorage.removeItem('admin_token');
+              setIsAuthenticated(false);
+            }
+          } else {
+            console.log('❌ Admin session validation failed - clearing session');
+            localStorage.removeItem('admin_token');
+            setIsAuthenticated(false);
+          }
+        } catch (error) {
+          console.error('❌ Session validation error:', error);
+          // Don't clear token on network errors, just don't auto-authenticate
+          setIsAuthenticated(false);
+        }
+      } else {
+        console.log('🔐 No admin token found - user needs to authenticate');
+        setIsAuthenticated(false);
+      }
+    };
+
+    checkAdminSession();
+  }, []);
+
+  // Handle session timeout and cleanup
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleSessionTimeout = () => {
+      const timeRemaining = SESSION_TIMEOUT - (Date.now() - lastActivity);
+      
+      if (timeRemaining <= 0) {
+        console.log('⏰ Admin session expired');
+        setIsAuthenticated(false);
+        localStorage.removeItem('admin_token');
+        setError('Session expired. Please login again.');
+      }
+    };
+
+    // Check session every minute
+    const sessionCheck = setInterval(handleSessionTimeout, 60000);
+    
+    return () => clearInterval(sessionCheck);
+  }, [isAuthenticated, lastActivity]);
+
   // Session management and auto-logout
   useEffect(() => {
     if (isAuthenticated) {
@@ -476,7 +545,6 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${publicAnonKey}`,
-          'X-Admin-Token': localStorage.getItem('admin_token') || '',
         },
         body: JSON.stringify({ newPassword })
       });
@@ -495,7 +563,30 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
     }
   };
 
+  // Helper function to get admin token with validation
+  const getValidAdminToken = () => {
+    const token = localStorage.getItem('admin_token');
+    if (!token) {
+      console.warn('❌ No admin token found - user needs to re-authenticate');
+      setIsAuthenticated(false);
+      return null;
+    }
+    return token;
+  };
 
+  // Helper function to create authenticated request headers
+  const getAuthHeaders = (additionalHeaders = {}) => {
+    const token = getValidAdminToken();
+    if (!token) return null;
+    
+    return {
+      'Authorization': `Bearer ${publicAnonKey}`,
+      'X-Admin-Token': token,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...additionalHeaders
+    };
+  };
 
   const authenticate = async () => {
     setLoading(true);
@@ -528,23 +619,23 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
       console.log(`⚡ Auth completed in ${duration}ms`);
       
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Authentication failed' }));
         console.error('🔐 Auth failed:', response.status, response.statusText);
         throw new Error(errorData.error || 'Authentication failed');
       }
 
       const result = await response.json();
 
-      if (result.success) {
+      if (result.success && result.token) {
+        // Store the admin token securely
+        localStorage.setItem('admin_token', result.token);
         setIsAuthenticated(true);
         setConnectionHealth('healthy');
         setLastSuccessfulConnection(Date.now());
-        
-        if (result.token) {
-          localStorage.setItem('admin_token', result.token);
-        }
+        setLastActivity(Date.now()); // Update activity timestamp
         
         setSuccess(`Authentication successful in ${duration}ms!`);
+        console.log('✅ Admin token stored successfully');
         
         // Load password status after authentication
         setTimeout(() => {
@@ -560,11 +651,18 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
         setError('Invalid password - check console for debug info');
         setPassword('');
       }
-    } catch (err) {
+    } catch (err: any) {
       const duration = Date.now() - startTime;
       console.error(`❌ Auth failed (${duration}ms):`, err);
       
-      setError('Authentication failed - check password and try again.');
+      // More specific error messages based on error type
+      if (err.message.includes('Failed to fetch') || err.name === 'TypeError') {
+        setError('Network error - please check your connection and try again.');
+      } else if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+        setError('Invalid password. Please check your password and try again.');
+      } else {
+        setError(err.message || 'Authentication failed - please try again.');
+      }
       setPassword('');
     } finally {
       setLoading(false);
@@ -606,7 +704,206 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
     setRequestDebouncer(timeout);
   };
 
-  // Background refresh without loading states using optimized batch endpoint
+  // Main dashboard data loading function with fallback support
+  const loadDashboardData = async (showLoadingState: boolean = false) => {
+    if (!isAuthenticated) {
+      console.warn('❌ Cannot load dashboard data - user not authenticated');
+      return;
+    }
+
+    if (showLoadingState) {
+      setLoading(true);
+      setError(null);
+      setLoadingProgress({ current: 0, total: 4, currentTask: 'Starting dashboard load...' });
+    }
+
+    console.log('🚀 Loading dashboard data...');
+    const startTime = Date.now();
+
+    try {
+      // Get authenticated headers
+      const headers = getAuthHeaders();
+      if (!headers) {
+        setError('Authentication required - please login again');
+        if (showLoadingState) {
+          setLoading(false);
+          setLoadingProgress({ current: 0, total: 0, currentTask: '' });
+        }
+        return;
+      }
+
+      if (showLoadingState) {
+        setLoadingProgress({ current: 1, total: 4, currentTask: 'Loading dashboard data...' });
+      }
+
+      // Try the batch endpoint first for speed
+      const batchUrl = `https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/admin/dashboard-data`;
+      
+      const controller = new AbortController();
+      setAbortController(controller);
+      
+      // Set timeout for batch request
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+      const response = await fetch(batchUrl, {
+        method: 'GET',
+        signal: controller.signal,
+        headers
+      });
+
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.warn('🔐 Admin session expired');
+          setIsAuthenticated(false);
+          localStorage.removeItem('admin_token');
+          setError('Session expired - please login again');
+          return;
+        }
+        throw new Error(`Batch request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const batchData = await response.json();
+      console.log(`📊 Batch request completed in ${Date.now() - startTime}ms`);
+
+      if (showLoadingState) {
+        setLoadingProgress({ current: 2, total: 4, currentTask: 'Processing data...' });
+      }
+
+      // Process batch data
+      if (batchData.subscribers) {
+        setSubscribers(batchData.subscribers.subscribers || []);
+        setSystemStatus(prev => ({ ...prev, database: 'active' }));
+        setCachedData('subscribers', batchData.subscribers, 120000);
+      }
+      
+      if (batchData.newsletters) {
+        setNewsletterHistory(batchData.newsletters.newsletters || []);
+        setSystemStatus(prev => ({ ...prev, newsletterSystem: 'active' }));
+        setCachedData('newsletters', batchData.newsletters, 180000);
+      }
+      
+      if (batchData.contacts) {
+        setContacts(batchData.contacts.contacts || []);
+        setSystemStatus(prev => ({ ...prev, contactForm: 'active' }));
+        calculateAnalytics(batchData.contacts.contacts || []);
+        setCachedData('contacts', batchData.contacts, 90000);
+      }
+
+      if (showLoadingState) {
+        setLoadingProgress({ current: 3, total: 4, currentTask: 'Testing services...' });
+      }
+
+      // Test email service
+      try {
+        const emailTestResponse = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/test-email`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`,
+            'X-Admin-Token': localStorage.getItem('admin_token') || '',
+            'Content-Type': 'application/json'
+          },
+          signal: AbortSignal.timeout(5000)
+        });
+
+        if (emailTestResponse.ok) {
+          const emailResult = await emailTestResponse.json();
+          setSystemStatus(prev => ({ ...prev, emailService: emailResult.success ? 'active' : 'error' }));
+        } else {
+          setSystemStatus(prev => ({ ...prev, emailService: 'error' }));
+        }
+      } catch (emailError) {
+        console.warn('⚠️ Email service test failed:', emailError);
+        setSystemStatus(prev => ({ ...prev, emailService: 'error' }));
+      }
+
+      // Reset error counters on success
+      setFailedRequests(0);
+      setIsBackendHealthy(true);
+      setConnectionHealth('healthy');
+      setLastSuccessfulConnection(Date.now());
+      setLastRefresh(Date.now());
+
+      if (showLoadingState) {
+        setLoadingProgress({ current: 4, total: 4, currentTask: 'Complete!' });
+        setSuccess(`Dashboard loaded successfully in ${Date.now() - startTime}ms`);
+      }
+
+      console.log(`✅ Dashboard data loaded successfully via batch endpoint (${Date.now() - startTime}ms)`);
+      
+    } catch (error) {
+      console.warn('⚠️ Batch request failed, falling back to individual requests:', error);
+      
+      // Fall back to individual requests
+      await loadDashboardDataFallback(showLoadingState);
+    }
+  };
+
+  // Helper function for backend health checking
+  const checkBackendHealth = () => {
+    if (failedRequests >= 3) {
+      setIsBackendHealthy(false);
+      setConnectionHealth('degraded');
+      console.warn('⚠️ Backend marked as unhealthy due to multiple failed requests');
+    } else if (Date.now() - lastSuccessfulConnection > 300000) { // 5 minutes
+      setConnectionHealth('degraded');
+      console.warn('⚠️ No successful connection in 5 minutes');
+    }
+  };
+
+  // Helper function for timeout and cache management
+  const fetchWithTimeoutAndCache = async (url: string, cacheKey: string, options: any = {}, timeout: number = 5000) => {
+    // Check cache first
+    const cached = getCachedData(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Get authenticated headers
+    const headers = getAuthHeaders(options.headers || {});
+    if (!headers) {
+      throw new Error('Authentication required');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setIsAuthenticated(false);
+          localStorage.removeItem('admin_token');
+          throw new Error('Authentication expired');
+        }
+        throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Cache the result
+      setCachedData(cacheKey, data, 90000); // 1.5 minutes cache
+      
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request timeout');
+      }
+      throw error;
+    }
+  };
+
+  // Background refresh without loading states for periodic updates
   const refreshDataInBackground = async () => {
     // Skip background refresh if backend is unhealthy
     if (!isBackendHealthy || !isOnline) {
@@ -621,6 +918,13 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
       const controller = new AbortController();
       setAbortController(controller);
       
+      // Get authenticated headers
+      const headers = getAuthHeaders();
+      if (!headers) {
+        console.warn('⚠️ Background refresh skipped (no admin token)');
+        return;
+      }
+      
       // Use the batch endpoint for faster background refresh with short timeout
       const batchUrl = `https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/admin/dashboard-data`;
       
@@ -630,510 +934,72 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
       const response = await fetch(batchUrl, {
         method: 'GET',
         signal: controller.signal,
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'X-Admin-Token': localStorage.getItem('admin_token') || '',
-          'Accept': 'application/json'
-        }
+        headers
       });
       
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        throw new Error(`Batch refresh failed: ${response.status}`);
-      }
-
-      const batchData = await response.json();
-      const duration = Date.now() - startTime;
-      
-      // Silently update data in background
-      if (batchData.subscribers) {
-        setSubscribers(batchData.subscribers.subscribers || []);
-        setSystemStatus(prev => ({ ...prev, database: 'active' }));
-      }
-      
-      if (batchData.newsletters) {
-        setNewsletterHistory(batchData.newsletters.newsletters || []);
-        setSystemStatus(prev => ({ ...prev, newsletterSystem: 'active' }));
-      }
-      
-      if (batchData.contacts) {
-        setContacts(batchData.contacts.contacts || []);
-        setSystemStatus(prev => ({ ...prev, contactForm: 'active' }));
-        calculateAnalytics(batchData.contacts.contacts || []);
-      }
-
-      setLastRefresh(Date.now());
-      console.log(`✅ Background refresh completed via batch endpoint (${duration}ms, cache: ${response.headers.get('X-Cache') || 'unknown'})`);
-      
-    } catch (error) {
-      console.warn('⚠️ Background batch refresh failed, trying individual requests:', error);
-      
-      // Fallback to individual requests
-      try {
-        const endpoints = [
-          { url: `https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/subscribers`, key: 'subscribers' },
-          { url: `https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/contacts`, key: 'contacts' }
-        ];
-
-        for (const endpoint of endpoints) {
-          try {
-            const result = await fetchWithTimeoutAndCache(endpoint.url, endpoint.key, {}, 2000);
-            
-            switch (endpoint.key) {
-              case 'subscribers':
-                if (result?.subscribers) {
-                  setSubscribers(result.subscribers);
-                }
-                break;
-              case 'contacts':
-                if (result?.contacts) {
-                  setContacts(result.contacts);
-                  calculateAnalytics(result.contacts);
-                }
-                break;
-            }
-            
-            // Shorter delay for background refresh
-            await new Promise(resolve => setTimeout(resolve, 200));
-          } catch (endpointError) {
-            console.warn(`⚠️ Background refresh failed for ${endpoint.key}:`, endpointError);
-          }
+        if (response.status === 401) {
+          console.warn('🔐 Admin session expired during background refresh');
+          setIsAuthenticated(false);
+          localStorage.removeItem('admin_token');
+          throw new Error('Authentication expired - please login again');
         }
-        
-        setLastRefresh(Date.now());
-        console.log(`✅ Background refresh completed via fallback (${Date.now() - startTime}ms)`);
-      } catch (fallbackError) {
-        console.warn('⚠️ Background refresh fallback also failed:', fallbackError);
-      }
-    }
-  };
-
-  // Circuit breaker pattern for backend health
-  const checkBackendHealth = () => {
-    if (failedRequests >= 3) {
-      setIsBackendHealthy(false);
-      setConnectionHealth('offline');
-      console.warn('🚨 Backend marked as unhealthy due to consecutive failures');
-      
-      // Auto-recover after 2 minutes
-      setTimeout(() => {
-        setFailedRequests(0);
-        setIsBackendHealthy(true);
-        setConnectionHealth('healthy');
-        console.log('🔄 Attempting backend health recovery');
-      }, 120000);
-    }
-  };
-
-  // Disabled network diagnostic for performance
-  const diagnoseNetworkIssue = async (url: string) => {
-    console.log('🔍 Network diagnostic disabled for performance');
-    return false;
-  };
-
-  // Enhanced fetch with caching, retry, and circuit breaker
-  const fetchWithTimeoutAndCache = async (
-    url: string, 
-    cacheKey: string, 
-    options: RequestInit = {}, 
-    timeout = 3000, // Reduced timeout to 3 seconds
-    signal?: AbortSignal,
-    retryCount = 0 // No retries initially to avoid spam
-  ) => {
-    // Check cache first
-    const cached = getCachedData(cacheKey);
-    if (cached) return cached;
-
-    // Check network connectivity
-    if (!isOnline) {
-      throw new Error('No network connection');
-    }
-
-    // Circuit breaker - if backend is unhealthy, use cache or fail gracefully
-    if (!isBackendHealthy) {
-      const staleCache = cache[cacheKey];
-      if (staleCache) {
-        console.log(`📦 Using stale cache for ${cacheKey} (backend unhealthy)`);
-        return staleCache.data;
-      }
-      throw new Error('Backend unavailable and no cached data');
-    }
-
-    const controller = new AbortController();
-    const combinedSignal = signal || controller.signal;
-    
-    for (let attempt = 0; attempt <= retryCount; attempt++) {
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-      
-      try {
-        console.log(`🔄 Attempting fetch for ${cacheKey} (attempt ${attempt + 1}/${retryCount + 1})`);
-        
-        const response = await fetch(url, {
-          ...options,
-          signal: combinedSignal,
-          mode: 'cors',
-          credentials: 'omit',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'X-Admin-Token': localStorage.getItem('admin_token') || '',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...options.headers
-          }
-        });
-
-        clearTimeout(timeoutId);
-        
-        console.log(`✅ Response received for ${cacheKey}: ${response.status} ${response.statusText}`);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`❌ HTTP Error for ${cacheKey}:`, response.status, response.statusText, errorText);
-          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
-        }
-
-        const data = await response.json();
-        
-        // Success - reset failure counter and mark backend healthy
-        setFailedRequests(0);
-        setIsBackendHealthy(true);
-        setConnectionHealth('healthy');
-        setLastSuccessfulConnection(Date.now());
-        
-        // Cache successful responses
-        setCachedData(cacheKey, data, 60000); // 1 minute cache
-        
-        console.log(`✅ Successfully fetched and cached ${cacheKey}`);
-        return data;
-      } catch (error) {
-        clearTimeout(timeoutId);
-        
-        console.error(`❌ Fetch failed for ${cacheKey} (attempt ${attempt + 1}):`, error);
-        
-        if (combinedSignal.aborted) {
-          console.error(`⏰ Request timeout for ${cacheKey} after ${timeout}ms`);
-          throw new Error(`Request timeout after ${timeout}ms`);
-        }
-
-        // Enhanced error logging
-        if (error instanceof Error) {
-          if (error.message.includes('Failed to fetch')) {
-            console.error('🚨 Network connectivity issue or server unreachable');
-            // Run diagnostic on first failure
-            if (attempt === 0) {
-              await diagnoseNetworkIssue(url);
-            }
-          } else if (error.message.includes('CORS')) {
-            console.error('🚨 CORS policy violation');
-          } else if (error.message.includes('Network')) {
-            console.error('🚨 General network error');
-          }
-        }
-
-        // Increment failure counter
-        setFailedRequests(prev => prev + 1);
-        
-        if (attempt < retryCount) {
-          const backoffDelay = 2000 + (attempt * 1000); // Longer backoff
-          console.warn(`⏳ Retrying ${cacheKey} in ${backoffDelay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, backoffDelay));
-          continue;
-        }
-        
-        // All retries failed
-        checkBackendHealth();
-        throw error;
-      }
-    }
-  };
-
-  // Mock data loader for demo mode (unused in production)
-  const loadMockData = () => {
-    // Mock subscribers
-    setSubscribers(['demo@example.com', 'test@example.com']);
-    
-    // Mock contacts
-    const mockContacts: ContactSubmission[] = [
-      {
-        id: 'demo-1',
-        name: 'Demo User',
-        email: 'demo@example.com',
-        company: 'Demo Company',
-        service: 'consultation',
-        budget: '$1000-5000',
-        timeline: '1-3 months',
-        message: 'This is a demo contact submission.',
-        submittedAt: new Date().toISOString(),
-        status: 'new'
-      }
-    ];
-    setContacts(mockContacts);
-    calculateAnalytics(mockContacts);
-    
-    // Mock newsletter history
-    const mockNewsletters: Newsletter[] = [
-      {
-        id: 'demo-newsletter-1',
-        subject: 'Demo Newsletter',
-        content: 'This is demo content',
-        previewText: 'Demo preview',
-        sentAt: new Date().toISOString(),
-        subscriberCount: 2,
-        successCount: 2,
-        failCount: 0,
-        status: 'sent'
-      }
-    ];
-    setNewsletterHistory(mockNewsletters);
-    
-    // Set system status
-    setSystemStatus({
-      emailService: 'active',
-      database: 'active',
-      contactForm: 'active',
-      newsletterSystem: 'active'
-    });
-  };
-
-  const loadDashboardData = async (showLoadingState = true) => {
-    // In demo mode, just load mock data immediately
-    if (isDemoMode) {
-      if (showLoadingState) {
-        setLoading(true);
-        setLoadingProgress({ current: 1, total: 1, currentTask: 'Loading demo data...' });
-        await new Promise(resolve => setTimeout(resolve, 200)); // Brief delay for UX
-      }
-      
-      loadMockData();
-      
-      if (showLoadingState) {
-        setLoading(false);
-        setLoadingProgress({ current: 0, total: 0, currentTask: '' });
-        setSuccess('Demo data loaded successfully');
-      }
-      return;
-    }
-
-    if (showLoadingState) {
-      setLoading(true);
-      setError(null);
-      setLoadingProgress({ current: 0, total: 3, currentTask: 'Connecting to server...' });
-    }
-
-    const startTime = Date.now();
-
-    // Skip loading if offline or backend unhealthy - use cached data
-    if (!isOnline || !isBackendHealthy) {
-      const cacheKeys = ['subscribers', 'newsletters', 'contacts'];
-      let hasCachedData = false;
-      
-      cacheKeys.forEach(key => {
-        const cached = cache[key];
-        if (cached) {
-          hasCachedData = true;
-          switch (key) {
-            case 'subscribers':
-              setSubscribers(cached.data.subscribers || []);
-              break;
-            case 'newsletters':
-              setNewsletterHistory(cached.data.newsletters || []);
-              break;
-            case 'contacts':
-              setContacts(cached.data.contacts || []);
-              calculateAnalytics(cached.data.contacts || []);
-              break;
-          }
-        }
-      });
-      
-      if (hasCachedData) {
-        const message = !isOnline 
-          ? 'Offline - showing cached data'
-          : 'Server unavailable - showing cached data';
-        setError(message);
-        console.log('📦 Using cached data (offline/backend unhealthy)');
-      } else {
-        // Always provide mock data when server is unavailable
-        console.log('🎭 No cached data available, using mock data');
-        setSubscribers(['example@example.com', 'test@test.com']);
-        setContacts([]);
-        setNewsletterHistory([]);
-        setAnalytics({
-          totalContacts: 0,
-          newContacts: 0,
-          responseRate: 0,
-          avgResponseTime: '0 hours',
-          completionRate: 0
-        });
-        setSystemStatus({
-          emailService: 'checking',
-          database: 'checking', 
-          contactForm: 'checking',
-          newsletterSystem: 'checking'
-        });
-        setError('Server response is slow. Using default data. The admin panel will refresh when connection improves.');
-      }
-      
-      if (showLoadingState) {
-        setLoading(false);
-        setLoadingProgress({ current: 0, total: 0, currentTask: '' });
-      }
-      return;
-    }
-    
-    try {
-      if (showLoadingState) {
-        setLoadingProgress({ current: 1, total: 3, currentTask: 'Loading dashboard data...' });
-      }
-
-      // Use the optimized batch endpoint with fast timeout
-      const batchUrl = `https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/admin/dashboard-data`;
-      
-      console.log('📊 Using optimized batch endpoint for dashboard data');
-      
-      const controller = new AbortController();
-      setAbortController(controller);
-      
-      // Start with a very fast timeout (2 seconds) to prevent UI blocking
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-        console.log('⏰ Fast timeout triggered - falling back to cached/mock data');
-      }, 2000);
-      
-      const response = await fetch(batchUrl, {
-        method: 'GET',
-        signal: controller.signal,
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'X-Admin-Token': localStorage.getItem('admin_token') || '',
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        }
-      });
-      
-      clearTimeout(timeoutId);
-      const duration = Date.now() - startTime;
-      
-      if (showLoadingState) {
-        setLoadingProgress({ current: 2, total: 3, currentTask: 'Processing dashboard data...' });
-      }
-
-      if (!response.ok) {
-        throw new Error(`Batch request failed: ${response.status} ${response.statusText}`);
+        throw new Error(`Batch refresh failed: ${response.status} ${response.statusText}`);
       }
 
       const batchData = await response.json();
       
-      console.log(`📊 Batch request completed in ${duration}ms (cache: ${response.headers.get('X-Cache') || 'unknown'})`);
+      console.log(`📊 Background refresh completed in ${Date.now() - startTime}ms`);
       
       // Process batch data
       if (batchData.subscribers) {
         setSubscribers(batchData.subscribers.subscribers || []);
         setSystemStatus(prev => ({ ...prev, database: 'active' }));
-        console.log(`👥 Loaded ${batchData.subscribers.count || 0} subscribers`);
+        setCachedData('subscribers', batchData.subscribers, 120000);
       }
       
       if (batchData.newsletters) {
         setNewsletterHistory(batchData.newsletters.newsletters || []);
         setSystemStatus(prev => ({ ...prev, newsletterSystem: 'active' }));
-        console.log(`📄 Loaded ${batchData.newsletters.count || 0} newsletters`);
+        setCachedData('newsletters', batchData.newsletters, 180000);
       }
       
       if (batchData.contacts) {
         setContacts(batchData.contacts.contacts || []);
         setSystemStatus(prev => ({ ...prev, contactForm: 'active' }));
         calculateAnalytics(batchData.contacts.contacts || []);
-        console.log(`📬 Loaded ${batchData.contacts.count || 0} contacts`);
+        setCachedData('contacts', batchData.contacts, 90000);
       }
 
-      // Test email service separately (fast endpoint)
-      try {
-        if (showLoadingState) {
-          setLoadingProgress({ current: 3, total: 3, currentTask: 'Testing email service...' });
-        }
-        
-        const emailTestResponse = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/test-email`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'X-Admin-Token': localStorage.getItem('admin_token') || '',
-            'Content-Type': 'application/json'
-          },
-          signal: AbortSignal.timeout(5000) // 5 second timeout for email test
-        });
-
-        if (emailTestResponse.ok) {
-          const emailResult = await emailTestResponse.json();
-          setSystemStatus(prev => ({ ...prev, emailService: emailResult.success ? 'active' : 'error' }));
-        } else {
-          setSystemStatus(prev => ({ ...prev, emailService: 'error' }));
-        }
-      } catch (emailError) {
-        console.warn('⚠️ Email service test failed:', emailError);
-        setSystemStatus(prev => ({ ...prev, emailService: 'error' }));
-      }
-
-
-
+      setLastRefresh(Date.now());
+      console.log(`✅ Background refresh completed via batch endpoint (${Date.now() - startTime}ms`);
+      
       // Reset error counters on successful batch request
       setFailedRequests(0);
       setIsBackendHealthy(true);
       setConnectionHealth('healthy');
       setLastSuccessfulConnection(Date.now());
-
-      if (showLoadingState) {
-        setSuccess(`Dashboard loaded successfully in ${duration}ms`);
-      }
       
-      console.log(`✅ Dashboard data loaded successfully via batch endpoint (${duration}ms)`);
-
     } catch (error) {
-      console.error('❌ Batch dashboard load failed:', error);
+      console.error('❌ Background refresh failed:', error);
       
       const duration = Date.now() - startTime;
       setFailedRequests(prev => prev + 1);
       
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          setError(`Server is slow - loading with demo data. Try refreshing for real data.`);
-          // Provide immediate mock data instead of waiting for more slow requests
-          setSubscribers(['demo@example.com', 'test@test.com']);
-          setContacts([]);
-          setNewsletterHistory([]);
-          setAnalytics({
-            totalContacts: 0,
-            newContacts: 0,
-            responseRate: 0,
-            avgResponseTime: '0 hours',
-            completionRate: 0
-          });
-          setSystemStatus({
-            emailService: 'checking',
-            database: 'checking',
-            contactForm: 'checking',
-            newsletterSystem: 'checking'
-          });
-          if (showLoadingState) {
-            setLoading(false);
-            setLoadingProgress({ current: 0, total: 0, currentTask: '' });
-          }
+          console.log('⏱️ Background refresh timed out - this is normal');
           return;
         } else if (error.message.includes('Failed to fetch')) {
-          setError('Unable to connect to server. Please check your connection.');
           setConnectionHealth('offline');
         } else {
-          setError(`Failed to load dashboard: ${error.message}`);
           setConnectionHealth('degraded');
         }
       }
       
       checkBackendHealth();
-    } finally {
-      if (showLoadingState) {
-        setLoading(false);
-        setLoadingProgress({ current: 0, total: 0, currentTask: '' });
-      }
     }
   };
 
@@ -1564,7 +1430,7 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
             </div>
             
             {error && (
-              <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">
+              <div className="p-3 bg-red-50 text-red-700 rounded-md border border-red-200">
                 {error}
               </div>
             )}
@@ -2246,7 +2112,8 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
                   <Separator />
 
                   {/* Static Files Status */}
-                  <div className="flex justify-center">
+                  <div className="space-y-6">
+                    <StaticFilesVerifier />
                     <StaticFilesChecker />
                   </div>
 
@@ -2335,8 +2202,42 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
 
             {/* Diagnostic Tab */}
             <TabsContent value="diagnostic" className="space-y-6">
-              <div className="flex justify-center">
-                <ConnectionDiagnostic />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Production Health Check */}
+                <div className="lg:col-span-1">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Production Health Monitor</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Real-time system health and status monitoring
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <SimpleProductionHealthCheck />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Connection Diagnostic */}
+                <div className="lg:col-span-1">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Connection Diagnostic</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Network connectivity and API endpoint testing
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <ConnectionDiagnostic />
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Additional Static File Validation for Diagnostic */}
+              <div className="grid lg:grid-cols-2 gap-6">
+                <StaticFileValidator />
+                <StaticFilesChecker />
               </div>
             </TabsContent>
 
@@ -2742,9 +2643,6 @@ P.S. If you're dealing with similar challenges, let's chat. I offer complimentar
         isVisible={showSEOAudit}
         onClose={() => setShowSEOAudit(false)}
       />
-
-
-
     </div>
   );
 }

@@ -41,7 +41,7 @@ export function Services({ onNavigateToResume }: ServicesProps) {
       price: "FREE",
       popular: true
     },
-
+  
     {
       icon: "💡",
       title: "Innovation Consulting",
@@ -86,7 +86,16 @@ export function Services({ onNavigateToResume }: ServicesProps) {
     }
   };
 
-
+  const openDigitalSignature = () => {
+    if (onNavigateToSignature) {
+      // Update URL for better UX
+      window.history.pushState({}, '', '/digital-signature');
+      onNavigateToSignature();
+    } else {
+      // Fallback to page reload
+      window.location.href = '/digital-signature';
+    }
+  };
 
   const handleServiceAction = (action: string) => {
     if (action === 'resume') {

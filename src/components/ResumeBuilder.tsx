@@ -92,6 +92,30 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
   // Track resume builder visit
   useEffect(() => {
     analytics.trackResumeBuilderVisit();
+    
+    // Test server connectivity
+    const testServerConnection = async () => {
+      try {
+        console.log('🔍 Testing server connection...');
+        const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/health`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`
+          }
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('✅ Server connection test successful:', result);
+        } else {
+          console.error('❌ Server connection test failed:', response.status);
+        }
+      } catch (error) {
+        console.error('❌ Server connection test error:', error);
+      }
+    };
+    
+    testServerConnection();
   }, []);
 
   const handleTemplateSelect = (templateId: string) => {
@@ -142,6 +166,18 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
         setIsDownloading(false);
         return;
       }
+
+      console.log('📤 Sending resume generation request:', {
+        hasResumeData: !!resumeData,
+        hasPersonalInfo: !!resumeData.personalInfo,
+        fullName: resumeData.personalInfo.fullName,
+        email: resumeData.personalInfo.email,
+        template: selectedTemplate,
+        format: format,
+        experienceCount: resumeData.experience?.length || 0,
+        educationCount: resumeData.education?.length || 0,
+        skillsCount: resumeData.skills?.length || 0
+      });
 
       // Call the free download endpoint
       const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-4d80a1b0/generate-resume`, {
@@ -221,11 +257,17 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
         }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
+        console.error('❌ [Resume] Server response error:', response.status, errorData);
         throw new Error(errorData.error || `Server error (${response.status})`);
       }
     } catch (error) {
-      console.error('Download error:', error);
-      setDownloadError(`Generation failed: ${error.message || 'Please try again. Make sure all required fields are filled.'}`);
+      console.error('❌ [Resume] Download error:', error);
+      console.error('❌ [Resume] Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      setDownloadError(`Error: ${error.message || 'Please try again. Make sure all required fields are filled.'}`);
     } finally {
       setIsDownloading(false);
     }
@@ -459,7 +501,7 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
                       <div className="flex items-center gap-2 text-blue-700 text-sm mb-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L5.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                         </svg>
                         <span className="font-medium">Privacy Promise</span>
                       </div>
@@ -508,7 +550,7 @@ export function ResumeBuilder({ onBack }: ResumeBuilderProps) {
               <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-purple-700 p-6 rounded-t-xl">
                 <div className="text-center">
                   <h3 className="text-white text-lg font-semibold opacity-75">
-                    {resumeData.personalInfo.fullName || 'herman kwayu'}
+                    {resumeData.personalInfo.fullName || 'Professional Resume'}
                   </h3>
                 </div>
               </div>

@@ -36,7 +36,7 @@ Disallow: /
 User-agent: SemrushBot
 Disallow: /
 
-# Sitemap location (will be updated dynamically)
+# Sitemap location
 Sitemap: https://www.hermankwayu.com/sitemap.xml
 
 # Important pages for crawling

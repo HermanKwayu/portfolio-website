@@ -41,6 +41,13 @@ export function Header() {
     setMobileMenuOpen(false);
   };
 
+  const navigateToSignature = () => {
+    window.dispatchEvent(new CustomEvent('navigate-to-signature', { 
+      detail: { view: 'signature' } 
+    }));
+    setMobileMenuOpen(false);
+  };
+
   const navigationItems = [
     { label: 'About', action: () => scrollToSection('about') },
     { label: 'Services', action: () => scrollToSection('services') },

@@ -1,4 +1,4 @@
-  import { Button } from "./ui/button";
+import { Button } from "./ui/button";
   
   export function Footer() {
     const scrollToSection = (sectionId: string) => {
@@ -6,6 +6,18 @@
       if (element) {
         element.scrollIntoView({ behavior: 'smooth' });
       }
+    };
+
+    const handleNavigateToPrivacy = () => {
+      // Dispatch custom event for navigation
+      const event = new CustomEvent('navigate-to-privacy', { detail: { view: 'privacy' } });
+      window.dispatchEvent(event);
+    };
+
+    const handleNavigateToTerms = () => {
+      // Dispatch custom event for navigation  
+      const event = new CustomEvent('navigate-to-terms', { detail: { view: 'terms' } });
+      window.dispatchEvent(event);
     };
   
     const socialLinks = [
@@ -120,8 +132,18 @@
               <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-6 text-sm text-primary-foreground/80">
                 <p>&copy; 2025 Herman Kwayu. All rights reserved.</p>
                 <div className="flex space-x-4">
-                  <a href="#" className="hover:text-primary-foreground transition-colors">Privacy Policy</a>
-                  <a href="#" className="hover:text-primary-foreground transition-colors">Terms of Service</a>
+                  <button 
+                    onClick={handleNavigateToPrivacy}
+                    className="hover:text-primary-foreground transition-colors cursor-pointer"
+                  >
+                    Privacy Policy
+                  </button>
+                  <button 
+                    onClick={handleNavigateToTerms}
+                    className="hover:text-primary-foreground transition-colors cursor-pointer"
+                  >
+                    Terms of Service
+                  </button>
                 </div>
               </div>
               

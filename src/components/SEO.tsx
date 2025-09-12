@@ -15,7 +15,7 @@ interface SEOProps {
 
 export function SEO({
   title = "Herman Kwayu - Business Consultant | Tanzania",
-  description = "Strategic Business Consultant & Digital Transformation Expert with 8+ years experience. Specializing in process optimization & growth strategy across Africa.",
+  description = "Expert Business Consultant & Digital Transformation Specialist with 8+ years experience helping businesses across Africa optimize processes, implement strategic planning, and achieve sustainable growth through innovative solutions. Specializing in KYC compliance, project management, fintech solutions, and telecom operations for startups and enterprises.",
   keywords = "Herman Kwayu, business consultant Tanzania, digital transformation expert, strategic planning consultant, project management specialist, process optimization, KYC compliance expert, telecom consultant, fintech solutions, business analyst Africa, Dar es Salaam consultant, remote business consultant, innovation consulting, change management, growth strategy consultant",
   image = "https://www.hermankwayu.com/og-image.jpg",
   url = "https://www.hermankwayu.com",

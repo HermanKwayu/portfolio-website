@@ -1,0 +1,9 @@
+Digital Signature component completely removed as requested by user on 2025-01-11.
+User clarified they wanted a personal signature design (SVG files created), not a digital signature application.
+
+All references removed from:
+- App.tsx (routes, navigation, imports)
+- Services.tsx (service object, functions, navigation)
+- Header.tsx (navigation links)
+
+Component file deleted and replaced with this marker.
