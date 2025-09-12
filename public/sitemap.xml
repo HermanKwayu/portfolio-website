@@ -2,6 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
         xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+
   <url>
     <loc>https://www.hermankwayu.com</loc>
     <lastmod>2025-01-14</lastmod>
@@ -13,6 +14,7 @@
       <image:caption>Strategic Business Consultant &amp; Digital Transformation Expert based in Tanzania</image:caption>
     </image:image>
   </url>
+
   <url>
     <loc>https://www.hermankwayu.com/#about</loc>
     <lastmod>2025-01-14</lastmod>
@@ -24,6 +26,7 @@
       <image:caption>Learn about Herman Kwayu&apos;s professional background and expertise in business consulting</image:caption>
     </image:image>
   </url>
+
   <url>
     <loc>https://www.hermankwayu.com/#services</loc>
     <lastmod>2025-01-14</lastmod>
@@ -35,6 +38,7 @@
       <image:caption>Comprehensive business consulting &amp; digital transformation services by Herman Kwayu</image:caption>
     </image:image>
   </url>
+
   <url>
     <loc>https://www.hermankwayu.com/#contact</loc>
     <lastmod>2025-01-14</lastmod>
@@ -46,6 +50,7 @@
       <image:caption>Get in touch with Herman Kwayu for business consulting &amp; strategic planning services</image:caption>
     </image:image>
   </url>
+
   <url>
     <loc>https://www.hermankwayu.com/#portfolio</loc>
     <lastmod>2025-01-14</lastmod>
@@ -57,6 +62,7 @@
       <image:caption>Professional portfolio showcasing Herman Kwayu&apos;s consulting projects &amp; achievements</image:caption>
     </image:image>
   </url>
+
   <url>
     <loc>https://www.hermankwayu.com/resume-builder</loc>
     <lastmod>2025-01-14</lastmod>
@@ -68,22 +74,26 @@
       <image:caption>Professional resume builder with 4 modern templates - completely free to use</image:caption>
     </image:image>
   </url>
+
   <url>
     <loc>https://www.hermankwayu.com/unsubscribe</loc>
     <lastmod>2025-01-14</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
+
   <url>
     <loc>https://www.hermankwayu.com/privacy-policy</loc>
     <lastmod>2025-01-14</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
+
   <url>
     <loc>https://www.hermankwayu.com/terms-of-service</loc>
     <lastmod>2025-01-14</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
+
 </urlset>
